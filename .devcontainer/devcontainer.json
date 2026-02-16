@@ -41,9 +41,5 @@
 
   "postStartCommand": "sudo apt-get update && sudo apt-get install -y ffmpeg",
 
-  "remoteEnv": {
-    "PYTHONPATH": "${containerWorkspaceFolder}/libs:${PYTHONPATH}"
-  },
-
   "remoteUser": "vscode"
 }

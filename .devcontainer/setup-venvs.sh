@@ -4,7 +4,7 @@
 set -e  # Exit on error
 
 PROJECT_ROOT="/workspaces/birds_of_vinca"
-PROJECTS=("curator" "poll_sightings")
+PROJECTS=("curator" "poll_sightings" "libs/bov_data")
 
 for project in "${PROJECTS[@]}"; do
     echo "Setting up virtual environment for $project..."

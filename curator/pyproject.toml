@@ -20,7 +20,8 @@ dependencies = [
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
     "requests>=2.32.5",
-    "httpx>=0.28.0"
+    "httpx>=0.28.0",
+    "bov-data @ file:///workspaces/birds_of_vinca/libs/bov_data"
 ]
 
 [project.optional-dependencies]

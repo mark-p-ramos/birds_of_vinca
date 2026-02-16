@@ -11,6 +11,10 @@
     {
       "name": "Poll Sightings",
       "path": "poll_sightings"
+    },
+    {
+      "name": "BOV Data",
+      "path": "libs/bov_data"
     }
   ],
   "settings": {
@@ -24,7 +28,15 @@
         "source.organizeImports": "explicit"
       }
     },
-    "ruff.enable": true
+    "ruff.enable": true,
+    "python.analysis.extraPaths": [
+      "${workspaceFolder:Poll Sightings}/.venv/lib/python3.12/site-packages",
+      "${workspaceFolder:Curator}/.venv/lib/python3.12/site-packages",
+      "${workspaceFolder:BOV Data}/src"
+    ],
+    "Curator.python.defaultInterpreterPath": "${workspaceFolder:Curator}/.venv/bin/python",
+    "Poll Sightings.python.defaultInterpreterPath": "${workspaceFolder:Poll Sightings}/.venv/bin/python",
+    "BOV Data.python.defaultInterpreterPath": "${workspaceFolder:BOV Data}/.venv/bin/python"
   },
   "extensions": {
     "recommendations": [
