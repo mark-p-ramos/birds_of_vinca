@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from bov_data import User
-from poll_sightings.process import _poll_sightings
+
+from poll_sightings.process import _poll_collections, _poll_feed
 
 # test update last database fetch timestamp
 # test create a google cloud task for each sighting
@@ -32,9 +32,7 @@ def mock_user(since_date):
 def mock_postcard(since_date):
     def _make(card_id="postcard_123", created_at=None):
         card = MagicMock()
-        card.get = MagicMock(
-            side_effect=lambda key: {"__typename": "FeedItemNewPostcard", "id": card_id}.get(key)
-        )
+        card.node_id = card_id
         card.data = {"id": card_id}
         card.created_at = created_at or since_date + timedelta(minutes=10)
         return card
@@ -66,189 +64,286 @@ def mock_sighting():
     return _make
 
 
+def _mock_feed(postcards):
+    """Create a mock feed object whose .filter() returns the given postcards."""
+    feed = MagicMock()
+    feed.filter = MagicMock(return_value=postcards)
+    return feed
+
+
 @pytest.mark.asyncio
-async def test_fetch_sightings_success(mock_user, mock_postcard, mock_sighting):
+async def test_fetch_sightings_success(mock_postcard, mock_sighting, since_date):
     """Test successful fetching of sightings with multiple species and media."""
-    with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
-        mock_bb_instance = AsyncMock()
-        mock_bird_buddy_class.return_value = mock_bb_instance
+    mock_bb = AsyncMock()
 
-        card = mock_postcard()
-        sighting_obj = mock_sighting(
-            images=["https://example.com/image1.jpg", "https://example.com/image2.jpg"],
-            videos=["https://example.com/video1.mp4"],
-        )
-        mock_bb_instance.refresh_feed = AsyncMock(return_value=[card])
-        mock_bb_instance.sighting_from_postcard = AsyncMock(return_value=sighting_obj)
+    card = mock_postcard()
+    sighting_obj = mock_sighting(
+        images=["https://example.com/image1.jpg", "https://example.com/image2.jpg"],
+        videos=["https://example.com/video1.mp4"],
+    )
+    mock_bb.feed = AsyncMock(return_value=_mock_feed([card]))
+    mock_bb.sighting_from_postcard = AsyncMock(return_value=sighting_obj)
 
-        result = await _poll_sightings(mock_user)
+    result = await _poll_feed(mock_bb, since_date)
 
-        mock_bird_buddy_class.assert_called_once_with("test_user", "test_password")
+    assert mock_bb.feed.called
+    mock_bb.sighting_from_postcard.assert_called_once_with("postcard_123")
 
-        assert mock_bb_instance.refresh_feed.called
-        call_args = mock_bb_instance.refresh_feed.call_args
-        assert "since" in call_args.kwargs
-        assert isinstance(call_args.kwargs["since"], datetime)
-
-        mock_bb_instance.sighting_from_postcard.assert_called_once_with("postcard_123")
-
-        assert len(result) == 1
-        sighting = result[0]
-        assert sighting.card_id == "postcard_123"
-        assert sighting.created_at == card.created_at
-        assert set(sighting.species) == {"Blue Jay", "Cardinal"}
-        assert sighting.media.images == [
-            "https://example.com/image1.jpg",
-            "https://example.com/image2.jpg",
-        ]
-        assert sighting.media.videos == ["https://example.com/video1.mp4"]
+    assert len(result) == 1
+    sighting = result[0]
+    assert sighting["bb_id"] == "postcard-postcard_123"
+    assert sighting["created_at"] == card.created_at
+    assert set(sighting["species"]) == {"Blue Jay", "Cardinal"}
+    assert sighting["image_urls"] == [
+        "https://example.com/image1.jpg",
+        "https://example.com/image2.jpg",
+    ]
+    assert sighting["video_urls"] == ["https://example.com/video1.mp4"]
 
 
 @pytest.mark.asyncio
-async def test_fetch_sightings_empty_feed(mock_user):
+async def test_fetch_sightings_empty_feed(since_date):
     """Test fetching sightings when feed is empty."""
-    with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
-        mock_bb_instance = AsyncMock()
-        mock_bird_buddy_class.return_value = mock_bb_instance
+    mock_bb = AsyncMock()
+    mock_bb.feed = AsyncMock(return_value=_mock_feed([]))
 
-        mock_bb_instance.refresh_feed = AsyncMock(return_value=[])
+    result = await _poll_feed(mock_bb, since_date)
 
-        result = await _poll_sightings(mock_user)
-
-        assert len(result) == 0
+    assert len(result) == 0
 
 
 @pytest.mark.asyncio
-async def test_fetch_sightings_filters_non_postcards(
-    mock_user, mock_postcard, mock_sighting
-):
-    """Test that non-postcard items are filtered out."""
-    with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
-        mock_bb_instance = AsyncMock()
-        mock_bird_buddy_class.return_value = mock_bb_instance
+async def test_fetch_sightings_filters_non_postcards(mock_postcard, mock_sighting, since_date):
+    """Test that non-postcard items are filtered out (by bb_feed.filter)."""
+    mock_bb = AsyncMock()
 
-        non_postcard_item = MagicMock()
-        non_postcard_item.get = MagicMock(
-            side_effect=lambda key: {"__typename": "FeedItemOtherType", "id": "other_789"}.get(key)
-        )
+    card = mock_postcard()
+    feed = _mock_feed([card])
+    mock_bb.feed = AsyncMock(return_value=feed)
+    mock_bb.sighting_from_postcard = AsyncMock(return_value=mock_sighting())
 
-        mock_bb_instance.refresh_feed = AsyncMock(return_value=[non_postcard_item, mock_postcard()])
-        mock_bb_instance.sighting_from_postcard = AsyncMock(return_value=mock_sighting())
+    result = await _poll_feed(mock_bb, since_date)
 
-        result = await _poll_sightings(mock_user)
-
-        assert len(result) == 1
-        assert result[0].card_id == "postcard_123"
-        mock_bb_instance.sighting_from_postcard.assert_called_once_with("postcard_123")
+    feed.filter.assert_called_once()
+    assert len(result) == 1
+    assert result[0]["bb_id"] == "postcard-postcard_123"
+    mock_bb.sighting_from_postcard.assert_called_once_with("postcard_123")
 
 
 @pytest.mark.asyncio
 async def test_fetch_sightings_filters_unrecognized_species(
-    mock_user, mock_postcard, mock_sighting
+    mock_postcard, mock_sighting, since_date
 ):
     """Test that unrecognized species are filtered out."""
-    with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
-        mock_bb_instance = AsyncMock()
-        mock_bird_buddy_class.return_value = mock_bb_instance
+    mock_bb = AsyncMock()
 
-        sighting_obj = mock_sighting()
-        unrecognized = MagicMock()
-        unrecognized.species.name = "Unknown Bird"
-        unrecognized.is_recognized = False
-        sighting_obj.report.sightings.append(unrecognized)
+    sighting_obj = mock_sighting()
+    unrecognized = MagicMock()
+    unrecognized.species.name = "Unknown Bird"
+    unrecognized.is_recognized = False
+    sighting_obj.report.sightings.append(unrecognized)
 
-        mock_bb_instance.refresh_feed = AsyncMock(return_value=[mock_postcard()])
-        mock_bb_instance.sighting_from_postcard = AsyncMock(return_value=sighting_obj)
+    mock_bb.feed = AsyncMock(return_value=_mock_feed([mock_postcard()]))
+    mock_bb.sighting_from_postcard = AsyncMock(return_value=sighting_obj)
 
-        result = await _poll_sightings(mock_user)
+    result = await _poll_feed(mock_bb, since_date)
 
-        assert len(result) == 1
-        assert "Unknown Bird" not in result[0].species
+    assert len(result) == 1
+    assert "Unknown Bird" not in result[0]["species"]
 
 
 @pytest.mark.asyncio
-async def test_fetch_sightings_deduplicates_species(
-    mock_user, mock_postcard, mock_sighting
-):
+async def test_fetch_sightings_deduplicates_species(mock_postcard, mock_sighting, since_date):
     """Test that duplicate species names are deduplicated."""
-    with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
-        mock_bb_instance = AsyncMock()
-        mock_bird_buddy_class.return_value = mock_bb_instance
+    mock_bb = AsyncMock()
 
-        sighting_obj = mock_sighting()
-        duplicate = MagicMock()
-        duplicate.species.name = sighting_obj.report.sightings[0].species.name
-        duplicate.is_recognized = True
-        sighting_obj.report.sightings.append(duplicate)
+    sighting_obj = mock_sighting()
+    duplicate = MagicMock()
+    duplicate.species.name = sighting_obj.report.sightings[0].species.name
+    duplicate.is_recognized = True
+    sighting_obj.report.sightings.append(duplicate)
 
-        mock_bb_instance.refresh_feed = AsyncMock(return_value=[mock_postcard()])
-        mock_bb_instance.sighting_from_postcard = AsyncMock(return_value=sighting_obj)
+    mock_bb.feed = AsyncMock(return_value=_mock_feed([mock_postcard()]))
+    mock_bb.sighting_from_postcard = AsyncMock(return_value=sighting_obj)
 
-        result = await _poll_sightings(mock_user)
+    result = await _poll_feed(mock_bb, since_date)
 
-        assert len(result) == 1
-        assert len(result[0].species) == len(set(result[0].species))
+    assert len(result) == 1
+    assert len(result[0]["species"]) == len(set(result[0]["species"]))
 
 
 @pytest.mark.asyncio
-async def test_fetch_sightings_no_media(mock_user, mock_postcard, mock_sighting):
+async def test_fetch_sightings_no_media(mock_postcard, mock_sighting, since_date):
     """Test sighting with no images or videos."""
-    with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
-        mock_bb_instance = AsyncMock()
-        mock_bird_buddy_class.return_value = mock_bb_instance
+    mock_bb = AsyncMock()
+    mock_bb.feed = AsyncMock(return_value=_mock_feed([mock_postcard()]))
+    mock_bb.sighting_from_postcard = AsyncMock(return_value=mock_sighting())
 
-        mock_bb_instance.refresh_feed = AsyncMock(return_value=[mock_postcard()])
-        mock_bb_instance.sighting_from_postcard = AsyncMock(return_value=mock_sighting())
+    result = await _poll_feed(mock_bb, since_date)
 
-        result = await _poll_sightings(mock_user)
-
-        assert len(result) == 1
-        assert result[0].media.images == []
-        assert result[0].media.videos == []
+    assert len(result) == 1
+    assert result[0]["image_urls"] == []
+    assert result[0]["video_urls"] == []
 
 
 @pytest.mark.asyncio
-async def test_fetch_sightings_feed_type_propagated(
-    mock_user, mock_postcard, mock_sighting
-):
-    """All returned sightings should have feed_type matching the value passed to poll_sightings."""
-    with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
-        mock_bb_instance = AsyncMock()
-        mock_bird_buddy_class.return_value = mock_bb_instance
-
-        mock_bb_instance.refresh_feed = AsyncMock(
-            return_value=[mock_postcard("postcard_1"), mock_postcard("postcard_2")]
-        )
-        mock_bb_instance.sighting_from_postcard = AsyncMock(
-            side_effect=[mock_sighting(species=["Robin"]), mock_sighting(species=["Finch"])]
-        )
-
-        result = await _poll_sightings(mock_user)
-
-        assert len(result) == 2
-        assert all(s.feed_type == "BIRD_BUDDY" for s in result)
-
-
-@pytest.mark.asyncio
-async def test_fetch_sightings_multiple_postcards(
-    mock_user, mock_postcard, mock_sighting
-):
+async def test_fetch_sightings_multiple_postcards(mock_postcard, mock_sighting, since_date):
     """Test fetching multiple postcards."""
-    with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
-        mock_bb_instance = AsyncMock()
-        mock_bird_buddy_class.return_value = mock_bb_instance
+    mock_bb = AsyncMock()
+    mock_bb.feed = AsyncMock(
+        return_value=_mock_feed([mock_postcard("postcard_1"), mock_postcard("postcard_2")])
+    )
+    mock_bb.sighting_from_postcard = AsyncMock(
+        side_effect=[mock_sighting(species=["Crow"]), mock_sighting(species=["Hawk"])]
+    )
 
-        mock_bb_instance.refresh_feed = AsyncMock(
-            return_value=[mock_postcard("postcard_1"), mock_postcard("postcard_2")]
+    result = await _poll_feed(mock_bb, since_date)
+
+    assert len(result) == 2
+    assert result[0]["bb_id"] == "postcard-postcard_1"
+    assert result[0]["species"] == ["Crow"]
+    assert result[1]["bb_id"] == "postcard-postcard_2"
+    assert result[1]["species"] == ["Hawk"]
+
+
+# --- _poll_collections tests ---
+
+
+@pytest.fixture
+def mock_collection(since_date):
+    def _make(
+        collection_id="col_123",
+        bird_name="Blue Jay",
+        visit_time=None,
+    ):
+        col = MagicMock()
+        col.collection_id = collection_id
+        col.bird_name = bird_name
+        visit = visit_time or (since_date + timedelta(minutes=10))
+        col.data = {"visitLastTime": visit.isoformat()}
+        return col
+
+    return _make
+
+
+def _mock_media(images=None, videos=None):
+    """Create a mock media dict as returned by bb.collection()."""
+    media = {}
+    for i, url in enumerate(images or []):
+        m = MagicMock()
+        m.content_url = url
+        m.is_video = False
+        media[f"img_{i}"] = m
+    for i, url in enumerate(videos or []):
+        m = MagicMock()
+        m.content_url = url
+        m.is_video = True
+        media[f"vid_{i}"] = m
+    return media
+
+
+@pytest.mark.asyncio
+async def test_poll_collections_success(mock_collection, since_date):
+    """Test successful fetching of collections with images and videos."""
+    mock_bb = AsyncMock()
+
+    col = mock_collection()
+    mock_bb.refresh_collections = AsyncMock(return_value={"col_123": col})
+    mock_bb.collection = AsyncMock(
+        return_value=_mock_media(
+            images=["https://example.com/img1.jpg"],
+            videos=["https://example.com/vid1.mp4"],
         )
-        mock_bb_instance.sighting_from_postcard = AsyncMock(
-            side_effect=[mock_sighting(species=["Crow"]), mock_sighting(species=["Hawk"])]
-        )
+    )
 
-        result = await _poll_sightings(mock_user)
+    result = await _poll_collections(mock_bb, since_date)
 
-        assert len(result) == 2
-        assert result[0].card_id == "postcard_1"
-        assert result[0].species == ["Crow"]
-        assert result[1].card_id == "postcard_2"
-        assert result[1].species == ["Hawk"]
+    mock_bb.refresh_collections.assert_called_once()
+    mock_bb.collection.assert_called_once_with("col_123")
+
+    assert len(result) == 1
+    entry = result[0]
+    assert entry["bb_id"] == "collection-col_123"
+    assert entry["species"] == ["Blue Jay"]
+    assert entry["image_urls"] == ["https://example.com/img1.jpg"]
+    assert entry["video_urls"] == ["https://example.com/vid1.mp4"]
+
+
+@pytest.mark.asyncio
+async def test_poll_collections_empty(since_date):
+    """Test with no collections returned."""
+    mock_bb = AsyncMock()
+    mock_bb.refresh_collections = AsyncMock(return_value={})
+
+    result = await _poll_collections(mock_bb, since_date)
+
+    assert len(result) == 0
+
+
+@pytest.mark.asyncio
+async def test_poll_collections_filters_old(mock_collection, since_date):
+    """Test that collections older than since are filtered out."""
+    mock_bb = AsyncMock()
+
+    old_col = mock_collection(
+        collection_id="old_col",
+        visit_time=since_date - timedelta(hours=1),
+    )
+    new_col = mock_collection(collection_id="new_col")
+
+    mock_bb.refresh_collections = AsyncMock(
+        return_value={"old_col": old_col, "new_col": new_col}
+    )
+    mock_bb.collection = AsyncMock(return_value=_mock_media())
+
+    result = await _poll_collections(mock_bb, since_date)
+
+    assert len(result) == 1
+    assert result[0]["bb_id"] == "collection-new_col"
+    mock_bb.collection.assert_called_once_with("new_col")
+
+
+@pytest.mark.asyncio
+async def test_poll_collections_no_media(mock_collection, since_date):
+    """Test collection with no images or videos."""
+    mock_bb = AsyncMock()
+
+    mock_bb.refresh_collections = AsyncMock(
+        return_value={"col_123": mock_collection()}
+    )
+    mock_bb.collection = AsyncMock(return_value=_mock_media())
+
+    result = await _poll_collections(mock_bb, since_date)
+
+    assert len(result) == 1
+    assert result[0]["image_urls"] == []
+    assert result[0]["video_urls"] == []
+
+
+@pytest.mark.asyncio
+async def test_poll_collections_multiple(mock_collection, since_date):
+    """Test fetching multiple collections."""
+    mock_bb = AsyncMock()
+
+    col1 = mock_collection(collection_id="col_1", bird_name="Robin")
+    col2 = mock_collection(collection_id="col_2", bird_name="Finch")
+
+    mock_bb.refresh_collections = AsyncMock(
+        return_value={"col_1": col1, "col_2": col2}
+    )
+    mock_bb.collection = AsyncMock(
+        side_effect=[
+            _mock_media(images=["https://example.com/robin.jpg"]),
+            _mock_media(images=["https://example.com/finch.jpg"]),
+        ]
+    )
+
+    result = await _poll_collections(mock_bb, since_date)
+
+    assert len(result) == 2
+    assert result[0]["bb_id"] == "collection-col_1"
+    assert result[0]["species"] == ["Robin"]
+    assert result[0]["image_urls"] == ["https://example.com/robin.jpg"]
+    assert result[1]["bb_id"] == "collection-col_2"
+    assert result[1]["species"] == ["Finch"]
+    assert result[1]["image_urls"] == ["https://example.com/finch.jpg"]

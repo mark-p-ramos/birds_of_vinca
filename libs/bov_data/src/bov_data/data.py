@@ -29,7 +29,7 @@ class Media:
 
 @dataclass
 class Sighting:
-    card_id: str
+    bb_id: str
     user_id: str
     feed_type: str
     species: list[str]
