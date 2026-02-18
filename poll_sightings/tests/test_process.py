@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from bov_data import User
 from poll_sightings.process import _poll_sightings
 
 # test update last database fetch timestamp
@@ -11,15 +12,20 @@ from poll_sightings.process import _poll_sightings
 
 
 @pytest.fixture
-def mock_env_vars(monkeypatch):
-    """Set up mock environment variables."""
-    monkeypatch.setenv("BIRD_BUDDY_USER", "test_user")
-    monkeypatch.setenv("BIRD_BUDDY_PASSWORD", "test_password")
+def since_date():
+    return datetime.now(UTC) - timedelta(hours=2)
 
 
 @pytest.fixture
-def since_date():
-    return datetime.now(UTC) - timedelta(hours=2)
+def mock_user(since_date):
+    return User(
+        email="test@example.com",
+        bird_buddy_user="test_user",
+        bird_buddy_password="test_password",
+        _id="user_123",
+        feed_type="BIRD_BUDDY",
+        last_polled_at=since_date,
+    )
 
 
 @pytest.fixture
@@ -61,7 +67,7 @@ def mock_sighting():
 
 
 @pytest.mark.asyncio
-async def test_fetch_sightings_success(mock_env_vars, mock_postcard, mock_sighting, since_date):
+async def test_fetch_sightings_success(mock_user, mock_postcard, mock_sighting):
     """Test successful fetching of sightings with multiple species and media."""
     with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
         mock_bb_instance = AsyncMock()
@@ -75,7 +81,7 @@ async def test_fetch_sightings_success(mock_env_vars, mock_postcard, mock_sighti
         mock_bb_instance.refresh_feed = AsyncMock(return_value=[card])
         mock_bb_instance.sighting_from_postcard = AsyncMock(return_value=sighting_obj)
 
-        result = await _poll_sightings("user_123", "BIRD_BUDDY", since_date)
+        result = await _poll_sightings(mock_user)
 
         mock_bird_buddy_class.assert_called_once_with("test_user", "test_password")
 
@@ -99,7 +105,7 @@ async def test_fetch_sightings_success(mock_env_vars, mock_postcard, mock_sighti
 
 
 @pytest.mark.asyncio
-async def test_fetch_sightings_empty_feed(mock_env_vars, since_date):
+async def test_fetch_sightings_empty_feed(mock_user):
     """Test fetching sightings when feed is empty."""
     with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
         mock_bb_instance = AsyncMock()
@@ -107,14 +113,14 @@ async def test_fetch_sightings_empty_feed(mock_env_vars, since_date):
 
         mock_bb_instance.refresh_feed = AsyncMock(return_value=[])
 
-        result = await _poll_sightings("user_123", "BIRD_BUDDY", since_date)
+        result = await _poll_sightings(mock_user)
 
         assert len(result) == 0
 
 
 @pytest.mark.asyncio
 async def test_fetch_sightings_filters_non_postcards(
-    mock_env_vars, mock_postcard, mock_sighting, since_date
+    mock_user, mock_postcard, mock_sighting
 ):
     """Test that non-postcard items are filtered out."""
     with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
@@ -129,7 +135,7 @@ async def test_fetch_sightings_filters_non_postcards(
         mock_bb_instance.refresh_feed = AsyncMock(return_value=[non_postcard_item, mock_postcard()])
         mock_bb_instance.sighting_from_postcard = AsyncMock(return_value=mock_sighting())
 
-        result = await _poll_sightings("user_123", "BIRD_BUDDY", since_date)
+        result = await _poll_sightings(mock_user)
 
         assert len(result) == 1
         assert result[0].card_id == "postcard_123"
@@ -138,7 +144,7 @@ async def test_fetch_sightings_filters_non_postcards(
 
 @pytest.mark.asyncio
 async def test_fetch_sightings_filters_unrecognized_species(
-    mock_env_vars, mock_postcard, mock_sighting, since_date
+    mock_user, mock_postcard, mock_sighting
 ):
     """Test that unrecognized species are filtered out."""
     with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
@@ -154,7 +160,7 @@ async def test_fetch_sightings_filters_unrecognized_species(
         mock_bb_instance.refresh_feed = AsyncMock(return_value=[mock_postcard()])
         mock_bb_instance.sighting_from_postcard = AsyncMock(return_value=sighting_obj)
 
-        result = await _poll_sightings("user_123", "BIRD_BUDDY", since_date)
+        result = await _poll_sightings(mock_user)
 
         assert len(result) == 1
         assert "Unknown Bird" not in result[0].species
@@ -162,7 +168,7 @@ async def test_fetch_sightings_filters_unrecognized_species(
 
 @pytest.mark.asyncio
 async def test_fetch_sightings_deduplicates_species(
-    mock_env_vars, mock_postcard, mock_sighting, since_date
+    mock_user, mock_postcard, mock_sighting
 ):
     """Test that duplicate species names are deduplicated."""
     with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
@@ -178,14 +184,14 @@ async def test_fetch_sightings_deduplicates_species(
         mock_bb_instance.refresh_feed = AsyncMock(return_value=[mock_postcard()])
         mock_bb_instance.sighting_from_postcard = AsyncMock(return_value=sighting_obj)
 
-        result = await _poll_sightings("user_123", "BIRD_BUDDY", since_date)
+        result = await _poll_sightings(mock_user)
 
         assert len(result) == 1
         assert len(result[0].species) == len(set(result[0].species))
 
 
 @pytest.mark.asyncio
-async def test_fetch_sightings_no_media(mock_env_vars, mock_postcard, mock_sighting, since_date):
+async def test_fetch_sightings_no_media(mock_user, mock_postcard, mock_sighting):
     """Test sighting with no images or videos."""
     with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
         mock_bb_instance = AsyncMock()
@@ -194,7 +200,7 @@ async def test_fetch_sightings_no_media(mock_env_vars, mock_postcard, mock_sight
         mock_bb_instance.refresh_feed = AsyncMock(return_value=[mock_postcard()])
         mock_bb_instance.sighting_from_postcard = AsyncMock(return_value=mock_sighting())
 
-        result = await _poll_sightings("user_123", "BIRD_BUDDY", since_date)
+        result = await _poll_sightings(mock_user)
 
         assert len(result) == 1
         assert result[0].media.images == []
@@ -203,7 +209,7 @@ async def test_fetch_sightings_no_media(mock_env_vars, mock_postcard, mock_sight
 
 @pytest.mark.asyncio
 async def test_fetch_sightings_feed_type_propagated(
-    mock_env_vars, mock_postcard, mock_sighting, since_date
+    mock_user, mock_postcard, mock_sighting
 ):
     """All returned sightings should have feed_type matching the value passed to poll_sightings."""
     with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
@@ -217,7 +223,7 @@ async def test_fetch_sightings_feed_type_propagated(
             side_effect=[mock_sighting(species=["Robin"]), mock_sighting(species=["Finch"])]
         )
 
-        result = await _poll_sightings("user_123", "BIRD_BUDDY", since_date)
+        result = await _poll_sightings(mock_user)
 
         assert len(result) == 2
         assert all(s.feed_type == "BIRD_BUDDY" for s in result)
@@ -225,7 +231,7 @@ async def test_fetch_sightings_feed_type_propagated(
 
 @pytest.mark.asyncio
 async def test_fetch_sightings_multiple_postcards(
-    mock_env_vars, mock_postcard, mock_sighting, since_date
+    mock_user, mock_postcard, mock_sighting
 ):
     """Test fetching multiple postcards."""
     with patch("poll_sightings.process.BirdBuddy") as mock_bird_buddy_class:
@@ -239,7 +245,7 @@ async def test_fetch_sightings_multiple_postcards(
             side_effect=[mock_sighting(species=["Crow"]), mock_sighting(species=["Hawk"])]
         )
 
-        result = await _poll_sightings("user_123", "BIRD_BUDDY", since_date)
+        result = await _poll_sightings(mock_user)
 
         assert len(result) == 2
         assert result[0].card_id == "postcard_1"

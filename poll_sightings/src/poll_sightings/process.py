@@ -3,7 +3,7 @@ import os
 from datetime import UTC, datetime, timedelta
 
 from birdbuddy.client import BirdBuddy, PostcardSighting
-from bov_data import DB, Media, MongoClient, Sighting
+from bov_data import DB, Media, MongoClient, Sighting, User
 from dotenv import load_dotenv
 
 
@@ -27,17 +27,12 @@ def _to_sighting_props(bb_sighting: PostcardSighting) -> dict:
     }
 
 
-async def _poll_sightings(user_id: str, feed_type: str, sinceDate: datetime) -> list[Sighting]:
-
-    # TODO these should be associated with the user in DB not in env
-    bb_user = os.getenv("BIRD_BUDDY_USER")
-    bb_password = os.getenv("BIRD_BUDDY_PASSWORD")
-
-    bb = BirdBuddy(bb_user, bb_password)
+async def _poll_sightings(user: User) -> list[Sighting]:
+    bb = BirdBuddy(user.bird_buddy_user, user.bird_buddy_password)
 
     bb_postcards = [
         bb_card
-        for bb_card in await bb.refresh_feed(since=sinceDate)
+        for bb_card in await bb.refresh_feed(since=user.last_polled_at)
         if bb_card.get("__typename") == "FeedItemNewPostcard"
     ]
 
@@ -47,9 +42,9 @@ async def _poll_sightings(user_id: str, feed_type: str, sinceDate: datetime) -> 
     return [
         Sighting(
             card_id=bb_card.data["id"],
-            user_id=user_id,
+            user_id=user._id,
             created_at=bb_card.created_at,
-            feed_type=feed_type,
+            feed_type=user.feed_type,
             **_to_sighting_props(bb_sightings[i]),
         )
         for i, bb_card in enumerate(bb_postcards)
@@ -67,7 +62,7 @@ async def main():
         # debugging: remove this
         user.last_polled_at = datetime.now(UTC) - timedelta(hours=4)
 
-        sightings = await _poll_sightings(user._id, user.feed_type, user.last_polled_at)
+        sightings = await _poll_sightings(user)
         for sighting in sightings:
             # TODO: create cloud task
             print(f"{sighting.species[0] if sighting.species else 'unknown'} {sighting.created_at}")
