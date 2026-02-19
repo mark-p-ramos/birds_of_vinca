@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from bov_data import User
+from bov_data import BirdBuddy, BirdFeed, User
 
 from poll_sightings.process import _poll_collections, _poll_feed
 
@@ -20,11 +20,14 @@ def since_date():
 def mock_user(since_date):
     return User(
         email="test@example.com",
-        bird_buddy_user="test_user",
-        bird_buddy_password="test_password",
         _id="user_123",
-        feed_type="BIRD_BUDDY",
-        last_polled_at=since_date,
+        bird_buddy=BirdBuddy(
+            user="test_user",
+            password="test_password",
+            location_zip="80027",
+            feed=BirdFeed(brand="Test", product="Test Feed"),
+            last_polled_at=since_date,
+        ),
     )
 
 

@@ -1,13 +1,13 @@
 from typing import Optional, Protocol
 
-from bov_data.data import Sighting, User
+from bov_data.data import BirdBuddy, Sighting, User
 
 
 class DB(Protocol):
     def fetch_users(self) -> list[User]: ...
 
     def update_user(
-        self, id: str, feed_type: Optional[str] = None, last_polled_at: Optional[str] = None
+        self, id: str, bird_buddy: Optional[BirdBuddy] = None
     ) -> None: ...
 
     def create_sighting(self) -> str: ...

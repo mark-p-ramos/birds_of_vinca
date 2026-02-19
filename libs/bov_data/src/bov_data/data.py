@@ -5,21 +5,41 @@ from typing import Optional
 
 
 @dataclass
+class BirdFeed:
+    brand: str
+    product: str
+
+
+@dataclass
+class BirdBuddy:
+    user: str
+    password: str
+    location_zip: str
+    feed: BirdFeed
+    last_polled_at: Optional[datetime] = None
+
+    def __post_init__(self):
+        if isinstance(self.feed, dict):
+            self.feed = BirdFeed(**self.feed)
+
+
+@dataclass
 class User:
     email: str
-    bird_buddy_user: Optional[str] = None
-    bird_buddy_password: Optional[str] = None
     _id: Optional[str] = None
-    feed_type: Optional[str] = None
-    last_polled_at: Optional[datetime] = None
+    bird_buddy: Optional[BirdBuddy] = None
     created_at: Optional[datetime] = None
+
+    def __post_init__(self):
+        if isinstance(self.bird_buddy, dict):
+            self.bird_buddy = BirdBuddy(**self.bird_buddy)
 
 
 @dataclass
 class Weather:
-    temperature: float
-    is_precipitating: bool
-    sky_description: str
+    temperature_f: float
+    was_precipitating: bool
+    was_cloudy: bool
 
 
 @dataclass
@@ -32,9 +52,11 @@ class Media:
 class Sighting:
     bb_id: str
     user_id: str
-    feed_type: str
+    bird_feed: BirdFeed
+    location_zip: str
     species: list[str]
     media: Media
+    _id: Optional[str] = None
     weather: Optional[Weather] = None
     created_at: Optional[datetime] = None
 

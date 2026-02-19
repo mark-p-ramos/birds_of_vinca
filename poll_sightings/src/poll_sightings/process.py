@@ -2,7 +2,8 @@ import asyncio
 import os
 from datetime import UTC, datetime, timedelta
 
-from birdbuddy.client import BirdBuddy, FeedNodeType, PostcardSighting
+from birdbuddy.client import BirdBuddy as BirdBuddyClient
+from birdbuddy.client import FeedNodeType, PostcardSighting
 from bov_data import DB, Media, MongoClient, Sighting, User
 from dotenv import load_dotenv
 from google.cloud import tasks_v2
@@ -21,7 +22,7 @@ def _species_from_postcard(bb_sighting: PostcardSighting) -> list[str]:
     )
 
 
-async def _poll_feed(bb: BirdBuddy, since: datetime) -> list[dict]:
+async def _poll_feed(bb: BirdBuddyClient, since: datetime) -> list[dict]:
     MAX_FEED_SIZE = 100
 
     bb_feed = await bb.feed(first=MAX_FEED_SIZE)
@@ -42,7 +43,7 @@ async def _poll_feed(bb: BirdBuddy, since: datetime) -> list[dict]:
     ]
 
 
-async def _poll_collections(bb: BirdBuddy, since: datetime) -> list[dict]:
+async def _poll_collections(bb: BirdBuddyClient, since: datetime) -> list[dict]:
     bb_collections = await bb.refresh_collections()
     bb_collections = [
         col
@@ -70,14 +71,11 @@ def _get_db() -> DB:
 
 
 def _last_updated_at(user: User) -> datetime:
-    return (
-        user.last_polled_at
-        if user.last_polled_at is not None
-        else datetime.now(UTC) - timedelta(days=7)
-    )
+    last_polled = user.bird_buddy.last_polled_at if user.bird_buddy else None
+    return last_polled if last_polled is not None else datetime.now(UTC) - timedelta(days=7)
 
 
-async def _fetch_bb_items(bb: BirdBuddy, since: datetime) -> list[dict]:
+async def _fetch_bb_items(bb: BirdBuddyClient, since: datetime) -> list[dict]:
     bb_postcards, bb_collections = await asyncio.gather(
         _poll_feed(bb, since), _poll_collections(bb, since)
     )
@@ -106,7 +104,7 @@ async def main():
     db = _get_db()
     users = db.fetch_users()
     for user in users:
-        bb = BirdBuddy(user.bird_buddy_user, user.bird_buddy_password)
+        bb = BirdBuddyClient(user.bird_buddy.user, user.bird_buddy.password)
         since = _last_updated_at(user)
         bb_items = await _fetch_bb_items(bb, since)
 
@@ -114,7 +112,8 @@ async def main():
             sighting = Sighting(
                 bb_id=bb_item["bb_id"],
                 user_id=user._id,
-                feed_type=user.feed_type,
+                bird_feed=user.bird_buddy.feed,
+                location_zip=user.bird_buddy.location_zip,
                 species=bb_item["species"],
                 media=Media(images=bb_item["image_urls"], videos=bb_item["video_urls"]),
                 created_at=bb_item["created_at"],
@@ -124,7 +123,8 @@ async def main():
 
             since = max(since, sighting.created_at)
 
-        db.update_user(user._id, last_polled_at=since)
+        user.bird_buddy.last_polled_at = since
+        db.update_user(user._id, bird_buddy=user.bird_buddy)
 
 
 if __name__ == "__main__":
