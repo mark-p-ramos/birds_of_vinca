@@ -1,49 +1,51 @@
+from datetime import datetime
+
 import requests
 
-_SUPERIOR_CO_LAT = 39.921636
-_SUPERIOR_CO_LONG = -105.149215
 
-_HEADERS = {
-    "User-Agent": "birds-of-vinca (mark.p.ramos@gmail.com)",
-    "Accept": "application/geo+json",
-}
+def get_historical_weather(api_key: str, location: str, dt: datetime) -> dict:
+    """
+    Retrieve historical weather from WeatherAPI.com for a specific datetime.
 
+    Args:
+        api_key (str): Your WeatherAPI.com API key.
+        location (str): City name, ZIP, or "lat,lon".
+        dt (datetime): The datetime you want weather for (local time of location).
 
-def get_current_weather(lat: float = _SUPERIOR_CO_LAT, lon: float = _SUPERIOR_CO_LONG) -> dict:
-    # 1. Get forecast metadata (includes nearby stations)
-    points_url = f"https://api.weather.gov/points/{lat},{lon}"
-    points_resp = requests.get(points_url, headers=_HEADERS)
-    points_resp.raise_for_status()
-    points_data = points_resp.json()
+    Returns:
+        dict with:
+            - temperature_f (float)
+            - was_cloudy (bool)
+            - was_raining (bool)
+    """
 
-    # 2. Get nearest observation station
-    stations_url = points_data["properties"]["observationStations"]
-    stations_resp = requests.get(stations_url, headers=_HEADERS)
-    stations_resp.raise_for_status()
-    station_id = stations_resp.json()["features"][0]["properties"]["stationIdentifier"]
+    base_url = "http://api.weatherapi.com/v1/history.json"
+    date_str = dt.strftime("%Y-%m-%d")
+    hour = dt.hour
 
-    # 3. Get latest observation
-    obs_url = f"https://api.weather.gov/stations/{station_id}/observations/latest"
-    obs_resp = requests.get(obs_url, headers=_HEADERS)
-    obs_resp.raise_for_status()
-    obs = obs_resp.json()["properties"]
+    params = {"key": api_key, "q": location, "dt": date_str}
 
-    # Temperature (C → F)
-    temp_c = obs["temperature"]["value"]
-    temperature_f = None
-    if temp_c is not None:
-        temperature_f = round(temp_c * 9 / 5 + 32, 1)
+    response = requests.get(base_url, params=params)
+    response.raise_for_status()
 
-    # Cloud / sky condition
-    sky = obs.get("textDescription", "").lower()
-    is_cloudy = "cloud" in sky or "overcast" in sky
+    data = response.json()
 
-    # Precipitation
-    is_precipitating = obs["precipitationLastHour"]["value"] not in (None, 0)
+    # WeatherAPI returns hourly data inside forecast -> forecastday -> hour[]
+    hours = data["forecast"]["forecastday"][0]["hour"]
 
-    return {
-        "temperature_f": temperature_f,
-        "sky_description": obs["textDescription"],
-        "is_cloudy": is_cloudy,
-        "is_precipitating": is_precipitating,
-    }
+    # Find the matching hour
+    hour_data = next(
+        h for h in hours if datetime.strptime(h["time"], "%Y-%m-%d %H:%M").hour == hour
+    )
+
+    temperature_f = hour_data["temp_f"]
+
+    # Cloud logic
+    # Consider cloudy if cloud cover > 50%
+    was_cloudy = hour_data["cloud"] > 50
+
+    # Rain logic
+    # Consider raining if precipitation > 0 inches
+    was_raining = hour_data["precip_in"] > 0
+
+    return {"temperature_f": temperature_f, "was_cloudy": was_cloudy, "was_raining": was_raining}
