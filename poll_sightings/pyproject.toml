@@ -12,7 +12,9 @@ authors = [
     {name = "Birds of Vinca Team"}
 ]
 dependencies = [
+    "google-cloud-tasks>=2.21.0",
     "pybirdbuddy>=0.0.19",
+    "pymongo>=4.6.0",
     "python-dotenv>=1.2.1",
     "bov-data @ file:///workspaces/birds_of_vinca/libs/bov_data"
 ]

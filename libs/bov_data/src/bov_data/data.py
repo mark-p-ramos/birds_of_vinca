@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Optional
 
@@ -36,3 +37,8 @@ class Sighting:
     media: Media
     weather: Optional[Weather] = None
     created_at: Optional[datetime] = None
+
+    def to_json(self) -> str:
+        dictionary = asdict(self)
+        dictionary["created_at"] = self.created_at.isoformat()
+        return json.dumps(dictionary)

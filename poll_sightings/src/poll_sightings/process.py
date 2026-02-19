@@ -5,6 +5,8 @@ from datetime import UTC, datetime, timedelta
 from birdbuddy.client import BirdBuddy, FeedNodeType, PostcardSighting
 from bov_data import DB, Media, MongoClient, Sighting, User
 from dotenv import load_dotenv
+from google.cloud import tasks_v2
+from google.cloud.tasks_v2.types import HttpRequest, OidcToken, Task
 
 
 def _species_from_postcard(bb_sighting: PostcardSighting) -> list[str]:
@@ -85,8 +87,19 @@ async def _fetch_bb_items(bb: BirdBuddy, since: datetime) -> list[dict]:
 
 
 def _dispatch_import_sighting(sighting: Sighting) -> None:
-    # TODO: hit HTTP endpoint to create a google cloud task
-    pass
+    client = tasks_v2.CloudTasksClient()
+    parent = client.queue_path(project="birds-of-vinca", location="us-west3", queue="sightings")
+    service_account_email = "cloud-task-invoker@birds-of-vinca.iam.gserviceaccount.com"
+    cloud_function_url = "https://import-sighting-560240933279.us-west3.run.app"
+    http_request = HttpRequest(
+        http_method="POST",
+        url=cloud_function_url,
+        headers={"Content-type": "application/json"},
+        body=sighting.to_json().encode(),
+        oidc_token=OidcToken(service_account_email=service_account_email),
+    )
+    task = Task(http_request=http_request)
+    client.create_task(request={"parent": parent, "task": task})
 
 
 async def main():

@@ -37,9 +37,10 @@
     }
   },
 
-  "postCreateCommand": "bash .devcontainer/setup-venvs.sh",
-
-  "postStartCommand": "sudo apt-get update && sudo apt-get install -y ffmpeg",
+  // TODO: if you create a new container, you need to run the following as well
+  // gcloud auth application-default login
+  // gcloud auth application-default set-quota-project birds-of-vinca
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y ffmpeg && echo 'deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main' | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && sudo apt-get update -y && sudo apt-get install google-cloud-cli -y && bash .devcontainer/setup-venvs.sh",
 
   "remoteUser": "vscode"
 }
