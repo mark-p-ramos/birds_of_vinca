@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import os
 from datetime import UTC, datetime, timedelta
 
@@ -84,25 +85,37 @@ async def _fetch_bb_items(bb: BirdBuddyClient, since: datetime) -> list[dict]:
     return bb_postcards
 
 
-def _dispatch_import_sighting(sighting: Sighting) -> None:
-    client = tasks_v2.CloudTasksClient()
-    parent = client.queue_path(project="birds-of-vinca", location="us-west3", queue="sightings")
-    service_account_email = "cloud-task-invoker@birds-of-vinca.iam.gserviceaccount.com"
-    cloud_function_url = "https://import-sighting-560240933279.us-west3.run.app"
+async def _dispatch_import_sighting(sighting: Sighting) -> None:
+    PROJECT_ID = "birds-of-vinca"
+    LOCATION_ID = "us-west3"
+    QUEUE_ID = "sightings"
+    SERVICE_ACCOUNT = "cloud-task-invoker@birds-of-vinca.iam.gserviceaccount.com"
+    TARGET_URL = "https://import-sighting-560240933279.us-west3.run.app"
+
+    client = tasks_v2.CloudTasksAsyncClient()
+
     http_request = HttpRequest(
         http_method="POST",
-        url=cloud_function_url,
+        url=TARGET_URL,
         headers={"Content-type": "application/json"},
         body=sighting.to_json().encode(),
-        oidc_token=OidcToken(service_account_email=service_account_email),
+        oidc_token=OidcToken(service_account_email=SERVICE_ACCOUNT),
     )
-    task = Task(http_request=http_request)
-    client.create_task(request={"parent": parent, "task": task})
+    task_name = client.task_path(
+        project=PROJECT_ID,
+        location=LOCATION_ID,
+        queue=QUEUE_ID,
+        task=hashlib.sha256(sighting.bb_id.encode("utf-8")).hexdigest(),
+    )
+    task = Task(http_request=http_request, name=task_name)
+
+    parent = client.queue_path(project=PROJECT_ID, location=LOCATION_ID, queue=QUEUE_ID)
+    await client.create_task(request={"parent": parent, "task": task})
 
 
 async def main():
     db = _get_db()
-    users = db.fetch_users()
+    users = await db.fetch_users()
     for user in users:
         bb = BirdBuddyClient(user.bird_buddy.user, user.bird_buddy.password)
         since = _last_updated_at(user)
@@ -119,12 +132,12 @@ async def main():
                 created_at=bb_item["created_at"],
             )
 
-            _dispatch_import_sighting(sighting)
+            await _dispatch_import_sighting(sighting)
 
             since = max(since, sighting.created_at)
 
         user.bird_buddy.last_polled_at = since
-        db.update_user(user._id, bird_buddy=user.bird_buddy)
+        await db.update_user(user._id, bird_buddy=user.bird_buddy)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,10 @@ import cv2
 from moviepy import VideoFileClip, concatenate_videoclips
 
 
+def curate_videos(urls: list[str]) -> list[str]:
+    return []
+
+
 def _normalize_to_constant_frame_rate(input_path, output_path, fps=30):
     # Convert a video to constant frame rate (CFR) using ffmpeg.
     # if os.path.exists(output_path):

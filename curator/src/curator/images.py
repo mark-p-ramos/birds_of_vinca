@@ -5,6 +5,10 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 
+def curate_images(urls: list[str]) -> list[str]:
+    return []
+
+
 async def is_animal_visible(imageUrl: str) -> bool:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 

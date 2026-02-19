@@ -34,6 +34,9 @@ class User:
         if isinstance(self.bird_buddy, dict):
             self.bird_buddy = BirdBuddy(**self.bird_buddy)
 
+        if isinstance(self.created_at, str):
+            self.created_at = datetime.fromisoformat(self.created_at)
+
 
 @dataclass
 class Weather:
@@ -59,6 +62,19 @@ class Sighting:
     _id: Optional[str] = None
     weather: Optional[Weather] = None
     created_at: Optional[datetime] = None
+
+    def __post_init__(self):
+        if isinstance(self.bird_feed, dict):
+            self.bird_feed = BirdFeed(**self.bird_feed)
+
+        if isinstance(self.media, dict):
+            self.media = Media(**self.media)
+
+        if isinstance(self.weather, dict):
+            self.weather = Weather(**self.weather)
+
+        if isinstance(self.created_at, str):
+            self.created_at = datetime.fromisoformat(self.created_at)
 
     def to_json(self) -> str:
         dictionary = asdict(self)
