@@ -12,6 +12,14 @@ from curator.images import curate_images
 from curator.videos import curate_videos
 from curator.weather import get_historical_weather
 
+db: DB | None = None
+
+
+def db_connect() -> DB:
+    global db
+    db = db if db is not None else MongoClient(os.getenv("MONGODB_URI"))
+    return db
+
 
 @functions_framework.http
 def import_sighting(request: Request):
@@ -23,17 +31,13 @@ def import_sighting(request: Request):
     return asyncio.run(main(sighting))
 
 
-def _get_db() -> DB:
-    return MongoClient(os.getenv("MONGODB_URI"))
-
-
 # TODO
 # setup cloud storage
 # increase runtime of cloud function to at least 10 minutes
 # 3. curate images / upload to cloud storage
 # 4. curate videos / upload to cloud storage
 async def main(sighting: Sighting) -> str:
-    db = _get_db()
+    db = db_connect()
     if await db.exists_sighting(sighting.bb_id):
         return f"sighting id: {escape(sighting.bb_id)} already imported"
 
@@ -50,6 +54,15 @@ async def main(sighting: Sighting) -> str:
 
     created_id = db.create_sighting(sighting)
     return f"created sighting id: {created_id}"
+
+
+async def test_main():
+    db = db_connect()
+    exists = await db.exists_sighting(sighting.bb_id)
+    if exists:
+        print("found it")
+    else:
+        print("not found")
 
 
 if __name__ == "__main__":
@@ -72,5 +85,7 @@ if __name__ == "__main__":
         }
     )
 
-    result = asyncio.run(main(sighting))
-    print(result)
+    asyncio.run(test_main())
+
+    # result = asyncio.run(main(sighting))
+    # print(result)

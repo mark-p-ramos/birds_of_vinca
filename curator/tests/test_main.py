@@ -34,6 +34,13 @@ def _make_request(json_body=None):
     return request
 
 
+def _make_mock_db(**kwargs):
+    mock_db = MagicMock(**kwargs)
+    mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+    mock_db.__aexit__ = AsyncMock(return_value=False)
+    return mock_db
+
+
 @patch("curator.main.curate_videos", return_value=[])
 @patch("curator.main.curate_images", return_value=["curated.jpg"])
 @patch("curator.main.get_historical_weather", return_value={
@@ -44,7 +51,7 @@ def test_import_sighting_success(
     mock_get_db, _mock_weather, mock_images, mock_videos, sample_sighting_json
 ):
     """Test successful import of a new sighting."""
-    mock_db = MagicMock()
+    mock_db = _make_mock_db()
     mock_db.exists_sighting = AsyncMock(return_value=False)
     mock_db.create_sighting.return_value = "sighting_789"
     mock_get_db.return_value = mock_db
@@ -73,7 +80,7 @@ def test_import_sighting_writes_curated_media(
     mock_get_db, _mock_weather, _mock_images, _mock_videos, sample_sighting_json
 ):
     """Test that the sighting written to db has curated media blob names."""
-    mock_db = MagicMock()
+    mock_db = _make_mock_db()
     mock_db.exists_sighting = AsyncMock(return_value=False)
     mock_db.create_sighting.return_value = "sighting_789"
     mock_get_db.return_value = mock_db
@@ -103,7 +110,7 @@ def test_import_sighting_writes_curated_media(
 @patch("curator.main._get_db")
 def test_import_sighting_duplicate(mock_get_db, sample_sighting_json):
     """Test that duplicate sightings are rejected."""
-    mock_db = MagicMock()
+    mock_db = _make_mock_db()
     mock_db.exists_sighting = AsyncMock(return_value=True)
     mock_get_db.return_value = mock_db
 

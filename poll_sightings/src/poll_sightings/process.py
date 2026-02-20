@@ -10,6 +10,14 @@ from dotenv import load_dotenv
 from google.cloud import tasks_v2
 from google.cloud.tasks_v2.types import HttpRequest, OidcToken, Task
 
+db: DB | None = None
+
+
+def db_connect() -> DB:
+    global db
+    db = db if db is not None else MongoClient(os.getenv("MONGODB_URI"))
+    return db
+
 
 def _species_from_postcard(bb_sighting: PostcardSighting) -> list[str]:
     return list(
@@ -71,10 +79,6 @@ async def _poll_collections(bb: BirdBuddyClient, since: datetime) -> list[dict]:
     ]
 
 
-def _get_db() -> DB:
-    return MongoClient(os.getenv("MONGODB_URI"))
-
-
 def _last_updated_at(user: User) -> datetime:
     last_polled = user.bird_buddy.last_polled_at if user.bird_buddy else None
     return last_polled if last_polled is not None else datetime.now(UTC) - timedelta(days=7)
@@ -118,31 +122,31 @@ async def _dispatch_import_sighting(sighting: Sighting) -> None:
 
 
 async def main():
-    async with _get_db() as db:
-        users = await db.fetch_users()
+    db = db_connect()
+    users = await db.fetch_users()
 
-        for user in users:
-            bb = BirdBuddyClient(user.bird_buddy.user, user.bird_buddy.password)
-            since = _last_updated_at(user)
-            bb_items = await _fetch_bb_items(bb, since)
+    for user in users:
+        bb = BirdBuddyClient(user.bird_buddy.user, user.bird_buddy.password)
+        since = _last_updated_at(user)
+        bb_items = await _fetch_bb_items(bb, since)
 
-            for bb_item in bb_items:
-                sighting = Sighting(
-                    bb_id=bb_item["bb_id"],
-                    user_id=user._id,
-                    bird_feed=user.bird_buddy.feed,
-                    location_zip=user.bird_buddy.location_zip,
-                    species=bb_item["species"],
-                    media=Media(images=bb_item["image_urls"], videos=bb_item["video_urls"]),
-                    created_at=bb_item["created_at"],
-                )
+        for bb_item in bb_items:
+            sighting = Sighting(
+                bb_id=bb_item["bb_id"],
+                user_id=user._id,
+                bird_feed=user.bird_buddy.feed,
+                location_zip=user.bird_buddy.location_zip,
+                species=bb_item["species"],
+                media=Media(images=bb_item["image_urls"], videos=bb_item["video_urls"]),
+                created_at=bb_item["created_at"],
+            )
 
-                await _dispatch_import_sighting(sighting)
+            await _dispatch_import_sighting(sighting)
 
-                since = max(since, sighting.created_at)
+            since = max(since, sighting.created_at)
 
-            user.bird_buddy.last_polled_at = since
-            await db.update_user(user._id, bird_buddy=user.bird_buddy)
+        user.bird_buddy.last_polled_at = since
+        await db.update_user(user._id, bird_buddy=user.bird_buddy)
 
 
 if __name__ == "__main__":

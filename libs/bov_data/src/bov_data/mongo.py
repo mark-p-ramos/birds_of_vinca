@@ -1,10 +1,11 @@
 from dataclasses import asdict
-from typing import Optional, Self
+from typing import Optional
 
 import pymongo
 from bson.objectid import ObjectId
+from pymongo.asynchronous.database import AsyncDatabase
 
-from bov_data.data import BirdBuddy, User
+from bov_data.data import BirdBuddy, Sighting, User
 from bov_data.db import DB
 
 
@@ -14,19 +15,14 @@ def _id_to_str(doc: dict) -> dict:
 
 
 class MongoClient(DB):
-    _connection_uri: str
     _mongo_client: pymongo.AsyncMongoClient
-    _db: pymongo.database.Database
+    _db: AsyncDatabase
 
     def __init__(self, connection_uri: str):
-        self._connection_uri = connection_uri
-
-    async def __aenter__(self) -> Self:
-        self._mongo_client = pymongo.AsyncMongoClient(self._connection_uri, tz_aware=True)
+        self._mongo_client = pymongo.AsyncMongoClient(connection_uri, tz_aware=True)
         self._db = self._mongo_client.get_database()
-        return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def close(self) -> None:
         await self._mongo_client.close()
 
     async def fetch_users(self) -> list[User]:
@@ -41,8 +37,11 @@ class MongoClient(DB):
             {"_id": ObjectId(id)}, {"$set": {"bird_buddy": asdict(bird_buddy)}}
         )
 
-    async def create_sighting(self) -> str: ...
+    async def create_sighting(self, sighting: Sighting) -> str:
+        result = await self._db.sightings.insert_one(asdict(sighting))
+        sighting._id = result.inserted_id
+        return result.inserted_id
 
     async def exists_sighting(self, bb_id: str) -> bool:
-        doc = await self._db.find_one({"bb_id": bb_id})
+        doc = await self._db.sightings.find_one({"bb_id": bb_id})
         return doc is not None
