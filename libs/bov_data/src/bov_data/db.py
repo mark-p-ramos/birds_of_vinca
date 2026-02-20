@@ -1,9 +1,13 @@
-from typing import Optional, Protocol
+from typing import Optional, Protocol, Self
 
 from bov_data.data import BirdBuddy, User
 
 
 class DB(Protocol):
+    async def __aenter__(self) -> Self: ...
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None: ...
+
     async def fetch_users(self) -> list[User]: ...
 
     async def update_user(self, id: str, bird_buddy: Optional[BirdBuddy] = None) -> None: ...

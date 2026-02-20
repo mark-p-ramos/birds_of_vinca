@@ -21,6 +21,8 @@ class BirdBuddy:
     def __post_init__(self):
         if isinstance(self.feed, dict):
             self.feed = BirdFeed(**self.feed)
+        if isinstance(self.last_polled_at, str):
+            self.last_polled_at = datetime.fromisoformat(self.last_polled_at)
 
 
 @dataclass

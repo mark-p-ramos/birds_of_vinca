@@ -4,7 +4,7 @@ import cv2
 from moviepy import VideoFileClip, concatenate_videoclips
 
 
-def curate_videos(urls: list[str]) -> list[str]:
+async def curate_videos(urls: list[str]) -> list[str]:
     return []
 
 

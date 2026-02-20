@@ -44,12 +44,16 @@ async def _poll_feed(bb: BirdBuddyClient, since: datetime) -> list[dict]:
     ]
 
 
+def _to_aware(dt: datetime) -> datetime:
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+
+
 async def _poll_collections(bb: BirdBuddyClient, since: datetime) -> list[dict]:
     bb_collections = await bb.refresh_collections()
     bb_collections = [
         col
         for col in bb_collections.values()
-        if datetime.fromisoformat(col.data["visitLastTime"]) > since
+        if _to_aware(datetime.fromisoformat(col.data["visitLastTime"])) > since
     ]
 
     fetch_media = [bb.collection(col.collection_id) for col in bb_collections]
@@ -58,7 +62,7 @@ async def _poll_collections(bb: BirdBuddyClient, since: datetime) -> list[dict]:
     return [
         {
             "bb_id": f"collection-{col.collection_id}",
-            "created_at": datetime.fromisoformat(col.data["visitLastTime"]),
+            "created_at": _to_aware(datetime.fromisoformat(col.data["visitLastTime"])),
             "species": [col.bird_name],
             "image_urls": [m.content_url for m in media.values() if not m.is_video],
             "video_urls": [m.content_url for m in media.values() if m.is_video],
@@ -114,30 +118,31 @@ async def _dispatch_import_sighting(sighting: Sighting) -> None:
 
 
 async def main():
-    db = _get_db()
-    users = await db.fetch_users()
-    for user in users:
-        bb = BirdBuddyClient(user.bird_buddy.user, user.bird_buddy.password)
-        since = _last_updated_at(user)
-        bb_items = await _fetch_bb_items(bb, since)
+    async with _get_db() as db:
+        users = await db.fetch_users()
 
-        for bb_item in bb_items:
-            sighting = Sighting(
-                bb_id=bb_item["bb_id"],
-                user_id=user._id,
-                bird_feed=user.bird_buddy.feed,
-                location_zip=user.bird_buddy.location_zip,
-                species=bb_item["species"],
-                media=Media(images=bb_item["image_urls"], videos=bb_item["video_urls"]),
-                created_at=bb_item["created_at"],
-            )
+        for user in users:
+            bb = BirdBuddyClient(user.bird_buddy.user, user.bird_buddy.password)
+            since = _last_updated_at(user)
+            bb_items = await _fetch_bb_items(bb, since)
 
-            await _dispatch_import_sighting(sighting)
+            for bb_item in bb_items:
+                sighting = Sighting(
+                    bb_id=bb_item["bb_id"],
+                    user_id=user._id,
+                    bird_feed=user.bird_buddy.feed,
+                    location_zip=user.bird_buddy.location_zip,
+                    species=bb_item["species"],
+                    media=Media(images=bb_item["image_urls"], videos=bb_item["video_urls"]),
+                    created_at=bb_item["created_at"],
+                )
 
-            since = max(since, sighting.created_at)
+                await _dispatch_import_sighting(sighting)
 
-        user.bird_buddy.last_polled_at = since
-        await db.update_user(user._id, bird_buddy=user.bird_buddy)
+                since = max(since, sighting.created_at)
+
+            user.bird_buddy.last_polled_at = since
+            await db.update_user(user._id, bird_buddy=user.bird_buddy)
 
 
 if __name__ == "__main__":

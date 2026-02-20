@@ -1,5 +1,5 @@
 from dataclasses import asdict
-from typing import Optional
+from typing import Optional, Self
 
 import pymongo
 from bson.objectid import ObjectId
@@ -14,18 +14,23 @@ def _id_to_str(doc: dict) -> dict:
 
 
 class MongoClient(DB):
+    _connection_uri: str
     _mongo_client: pymongo.AsyncMongoClient
     _db: pymongo.database.Database
 
     def __init__(self, connection_uri: str):
-        self._mongo_client = pymongo.MongoClient(connection_uri)
-        self._db = self._mongo_client.get_database()
+        self._connection_uri = connection_uri
 
-    def __del__(self):
-        self._mongo_client.close()
+    async def __aenter__(self) -> Self:
+        self._mongo_client = pymongo.AsyncMongoClient(self._connection_uri, tz_aware=True)
+        self._db = self._mongo_client.get_database()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        await self._mongo_client.close()
 
     async def fetch_users(self) -> list[User]:
-        docs = await self._db.users.find({"bird_buddy": {"$ne": None}})
+        docs = await self._db.users.find({"bird_buddy": {"$ne": None}}).to_list()
         return [User(**_id_to_str(user)) for user in docs]
 
     async def update_user(self, id: str, bird_buddy: Optional[BirdBuddy] = None) -> None:

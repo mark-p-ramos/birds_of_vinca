@@ -5,11 +5,21 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 
-def curate_images(urls: list[str]) -> list[str]:
+async def curate_images(urls: list[str]) -> list[str]:
+    check_images = [_is_animal_visible(url) for url in urls]
+    images_analyzed = await asyncio.gather(*check_images)
+    images_visible = [url for url, visible in zip(urls, images_analyzed) if visible]
+    return images_visible
+
+    # TODO: dedup highly similar images
+    images_unique = await _dedup_images(images_visible)
+
+
+async def _dedup_images(urls: list[str]) -> list[str]:
     return []
 
 
-async def is_animal_visible(imageUrl: str) -> bool:
+async def _is_animal_visible(imageUrl: str) -> bool:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     response = client.responses.create(
@@ -40,7 +50,7 @@ async def main():
 
     # flicker frontal with beak off the screen
     image_url = "https://media.app-api-graphql.app-api.prod.aws.mybirdbuddy.com/media/feeder/348ec5f8-16b4-48f5-aa93-d8a054fa652e/media/bc4921d0-93e7-46bf-90e2-a736b678b95c/CONTENT.jpg?maxWidth=640&Expires=1771184057&Key-Pair-Id=K1HE0EC9UCSK2V&Signature=MEYCIQCCj3eTZJwpzgDjZmi1T2e5sydYzteqQib6V9E9sb3CSgIhAM7POt5xHrZB5MNByvTN37SLSKCfW6sOTJSuHIS7AXX0"
-    result = await is_animal_visible(image_url)
+    result = await _is_animal_visible(image_url)
     print(result)
     pass
 

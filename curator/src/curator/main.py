@@ -42,8 +42,11 @@ async def main(sighting: Sighting) -> str:
     )
     sighting.weather = Weather(**weather)
 
-    sighting.media.images = curate_images(sighting.media.images)
-    sighting.media.videos = curate_videos(sighting.media.videos)
+    images, videos = await asyncio.gather(
+        curate_images(sighting.media.images), curate_videos(sighting.media.videos)
+    )
+    sighting.media.images = images
+    sighting.media.videos = videos
 
     created_id = db.create_sighting(sighting)
     return f"created sighting id: {created_id}"
