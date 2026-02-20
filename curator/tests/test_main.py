@@ -63,6 +63,43 @@ def test_import_sighting_success(
     mock_videos.assert_called_once()
 
 
+@patch("curator.main.curate_videos", return_value=["videos/abc-123.mp4"])
+@patch("curator.main.curate_images", return_value=["images/def-456.jpg", "images/ghi-789.jpg"])
+@patch("curator.main.get_historical_weather", return_value={
+    "temperature_f": 55.0, "was_cloudy": True, "was_precipitating": False,
+})
+@patch("curator.main._get_db")
+def test_import_sighting_writes_curated_media(
+    mock_get_db, _mock_weather, _mock_images, _mock_videos, sample_sighting_json
+):
+    """Test that the sighting written to db has curated media blob names."""
+    mock_db = MagicMock()
+    mock_db.exists_sighting = AsyncMock(return_value=False)
+    mock_db.create_sighting.return_value = "sighting_789"
+    mock_get_db.return_value = mock_db
+
+    request = _make_request(sample_sighting_json)
+    import_sighting(request)
+
+    created_sighting = mock_db.create_sighting.call_args[0][0]
+
+    assert created_sighting.bb_id == sample_sighting_json["bb_id"]
+    assert created_sighting.user_id == sample_sighting_json["user_id"]
+    assert created_sighting.bird_feed == BirdFeed(**sample_sighting_json["bird_feed"])
+    assert created_sighting.location_zip == sample_sighting_json["location_zip"]
+    assert created_sighting.species == sample_sighting_json["species"]
+
+    assert created_sighting.media.images == ["images/def-456.jpg", "images/ghi-789.jpg"]
+    for img in created_sighting.media.images:
+        assert img.startswith("images/")
+        assert img.endswith(".jpg")
+
+    assert created_sighting.media.videos == ["videos/abc-123.mp4"]
+    for vid in created_sighting.media.videos:
+        assert vid.startswith("videos/")
+        assert vid.endswith(".mp4")
+
+
 @patch("curator.main._get_db")
 def test_import_sighting_duplicate(mock_get_db, sample_sighting_json):
     """Test that duplicate sightings are rejected."""

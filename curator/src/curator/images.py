@@ -1,25 +1,25 @@
 import asyncio
 import os
+from typing import List
+from urllib.parse import unquote, urlparse
 
+import httpx
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from curator.storage import GCS, unique_blob_name
+
 
 async def curate_images(urls: list[str]) -> list[str]:
-    check_images = [_is_animal_visible(url) for url in urls]
+    check_images = [_is_bird_visible(url) for url in urls]
     images_analyzed = await asyncio.gather(*check_images)
     images_visible = [url for url, visible in zip(urls, images_analyzed) if visible]
-    return images_visible
+    return await _upload_images(images_visible)
 
     # TODO: dedup highly similar images
-    images_unique = await _dedup_images(images_visible)
 
 
-async def _dedup_images(urls: list[str]) -> list[str]:
-    return []
-
-
-async def _is_animal_visible(imageUrl: str) -> bool:
+async def _is_bird_visible(imageUrl: str) -> bool:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     response = client.responses.create(
@@ -41,17 +41,60 @@ async def _is_animal_visible(imageUrl: str) -> bool:
     return response.output_text == "Yes"
 
 
+def _filename_from_url(url: str) -> str:
+    parsed = urlparse(url)
+    filename = unquote(parsed.path.split("/")[-1])
+    if not filename:
+        raise ValueError(f"Could not determine filename from URL: {url}")
+    return filename
+
+
+async def _upload_single_image(
+    client: httpx.AsyncClient,
+    bucket,
+    url: str,
+    semaphore: asyncio.Semaphore,
+):
+    async with semaphore:
+        filename = _filename_from_url(url)
+        blob_path = unique_blob_name("images", filename)
+        blob = bucket.blob(blob_path)
+
+        response = await client.get(url)
+        response.raise_for_status()
+
+        content_type = response.headers.get("Content-Type")
+
+        # GCS client is blocking → offload to thread
+        await asyncio.to_thread(
+            blob.upload_from_string,
+            response.content,
+            content_type=content_type,
+        )
+
+        return blob_path
+
+
+async def _upload_images(urls: List[str]):
+    bucket = GCS.bucket
+    semaphore = asyncio.Semaphore(10)  # Safe default for Cloud Functions
+
+    timeout = httpx.Timeout(10.0, connect=5.0)
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        tasks = [_upload_single_image(client, bucket, url, semaphore) for url in urls]
+
+        return await asyncio.gather(*tasks)
+
+
 async def main():
-    # dark finch in the seeds
-    # image_url = "https://media.app-api-graphql.app-api.prod.aws.mybirdbuddy.com/media/feeder/348ec5f8-16b4-48f5-aa93-d8a054fa652e/media/c009d425-21e9-4407-be42-85b29a70ad01/CONTENT.jpg?maxWidth=640&Expires=1771183767&Key-Pair-Id=K1HE0EC9UCSK2V&Signature=MEYCIQDEwMMtQJ-6Q64DicpKd5rCqFZ3bhuntrdMpkcOG-MbsQIhAJOPxcRalovOVGcrnXxi37qT9yhkEUEzAmf0P-kBuxzl"
-
-    # partial face of finch
-    # image_url = "https://media.app-api-graphql.app-api.prod.aws.mybirdbuddy.com/media/feeder/348ec5f8-16b4-48f5-aa93-d8a054fa652e/media/a837bf01-ceb6-4fff-a1b9-f310233f2870/CONTENT.jpg?maxWidth=640&Expires=1771184014&Key-Pair-Id=K1HE0EC9UCSK2V&Signature=MEYCIQCjs-JqeDOkIbKLxM7E-MHgev46GEbtS4t0WD9ODcuKHAIhAP6DkJChrdT3C-dXO4lgV6hOuCDdRRNblrD-KLReSR9Q"
-
-    # flicker frontal with beak off the screen
-    image_url = "https://media.app-api-graphql.app-api.prod.aws.mybirdbuddy.com/media/feeder/348ec5f8-16b4-48f5-aa93-d8a054fa652e/media/bc4921d0-93e7-46bf-90e2-a736b678b95c/CONTENT.jpg?maxWidth=640&Expires=1771184057&Key-Pair-Id=K1HE0EC9UCSK2V&Signature=MEYCIQCCj3eTZJwpzgDjZmi1T2e5sydYzteqQib6V9E9sb3CSgIhAM7POt5xHrZB5MNByvTN37SLSKCfW6sOTJSuHIS7AXX0"
-    result = await _is_animal_visible(image_url)
-    print(result)
+    # -- test upload images --
+    # urls = [
+    #     "https://media.app-api-graphql.app-api.prod.aws.mybirdbuddy.com/media/feeder/348ec5f8-16b4-48f5-aa93-d8a054fa652e/media/fe1eb837-07b6-44ce-99d2-4fb669701958/CONTENT.jpg?maxWidth=640&Expires=1771686528&Key-Pair-Id=K1HE0EC9UCSK2V&Signature=MEYCIQCPfPe9wRpLUhbInJI8KiwOsJPaQqX3LNYOcRFO7-RIPgIhAMg6hgg8-zZwph6e4E%7EAufyB93MBGbeaxBGORoh6Yvxb",
+    #     "https://media.app-api-graphql.app-api.prod.aws.mybirdbuddy.com/media/feeder/348ec5f8-16b4-48f5-aa93-d8a054fa652e/media/3513354a-fd72-4118-bd30-b45ab56bf101/CONTENT.jpg?maxWidth=640&Expires=1771686568&Key-Pair-Id=K1HE0EC9UCSK2V&Signature=MEYCIQDDWi-HOl8IdH-m17phgKn23mQ33jKBeoUHex6q2ovWYAIhAJc33UBGlKWfNhbOyNcVWKzUiKJ6g2KHjRPbCZ0MrRZi",
+    # ]
+    # new_urls = await _upload_images(urls)
+    # print(new_urls)
     pass
 
 
