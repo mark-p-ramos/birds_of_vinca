@@ -142,7 +142,7 @@ def _curate_video(file_path: str) -> str | None:
 
     # --------- CUT VIDEO ---------------------
     video = VideoFileClip(file_path)
-    clips = [video.subclipped(s, e) for s, e in merged]
+    clips = [video.subclipped(s, min(e, video.duration)) for s, e in merged]
 
     if clips:
         final = concatenate_videoclips(clips, method="compose")
