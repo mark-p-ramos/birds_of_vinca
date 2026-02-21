@@ -39,14 +39,13 @@ def import_sighting(request: Request):
     if not json:
         return "request missing json body"
 
+    sentry_sdk.set_context("sighting", json)
     sighting = Sighting(**json)
     return asyncio.run(main(sighting))
 
 
 async def main(sighting: Sighting) -> str:
     enable_asyncio_integration()
-
-    test_sentry = 1 / 0
 
     db = db_connect()
     if await db.exists_sighting(sighting.bb_id):

@@ -149,7 +149,7 @@ async def main():
                 since = sighting.created_at
         finally:
             user.bird_buddy.last_polled_at = since
-            await db.update_user(user._id, bird_buddy=user.bird_buddy)
+            # await db.update_user(user._id, bird_buddy=user.bird_buddy)
 
 
 if __name__ == "__main__":

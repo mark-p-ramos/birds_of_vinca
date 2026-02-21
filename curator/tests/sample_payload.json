@@ -1,0 +1,19 @@
+{
+   "bb_id":"postcard-123",
+   "user_id":"user_123",
+   "bird_feed":{
+      "brand":"3D Pet Products",
+      "product":"Sizzle N' Heat"
+   },
+   "location_zip":"80027",
+   "species":[
+      "House Finch"
+   ],
+   "media":{
+      "images":[],
+      "videos":[]
+   },
+   "_id":null,
+   "weather":null,
+   "created_at":"2026-02-14T19:29:24.522000+00:00"
+}
