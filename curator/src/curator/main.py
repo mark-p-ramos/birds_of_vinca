@@ -3,14 +3,26 @@ import os
 from datetime import datetime, timezone
 
 import functions_framework
+import sentry_sdk
 from bov_data import DB, MongoClient, Sighting, Weather
 from dotenv import load_dotenv
 from flask import Request
 from markupsafe import escape
+from sentry_sdk.integrations.asyncio import enable_asyncio_integration
+from sentry_sdk.integrations.gcp import GcpIntegration
 
 from curator.images import curate_images
 from curator.videos import curate_videos
 from curator.weather import get_historical_weather
+
+sentry_sdk.init(
+    dsn="https://1192a22bf953b2327b2219cfad5f4a44@o4510925100941312.ingest.us.sentry.io/4510925123747840",
+    integrations=[GcpIntegration(timeout_warning=True)],
+    # Add data like request headers and IP for users,
+    # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+    send_default_pii=True,
+)
+
 
 db: DB | None = None
 
@@ -32,6 +44,10 @@ def import_sighting(request: Request):
 
 
 async def main(sighting: Sighting) -> str:
+    enable_asyncio_integration()
+
+    test_sentry = 1 / 0
+
     db = db_connect()
     if await db.exists_sighting(sighting.bb_id):
         return f"sighting id: {escape(sighting.bb_id)} already imported"
