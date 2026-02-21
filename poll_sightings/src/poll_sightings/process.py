@@ -88,9 +88,7 @@ async def _fetch_bb_items(bb: BirdBuddyClient, since: datetime) -> list[dict]:
     bb_postcards, bb_collections = await asyncio.gather(
         _poll_feed(bb, since), _poll_collections(bb, since)
     )
-
-    bb_postcards.extend(bb_collections)
-    return bb_postcards
+    return sorted(bb_postcards + bb_collections, key=lambda x: x["created_at"])
 
 
 async def _dispatch_import_sighting(sighting: Sighting) -> None:
@@ -98,7 +96,7 @@ async def _dispatch_import_sighting(sighting: Sighting) -> None:
     LOCATION_ID = "us-west3"
     QUEUE_ID = "sightings"
     SERVICE_ACCOUNT = "cloud-task-invoker@birds-of-vinca.iam.gserviceaccount.com"
-    TARGET_URL = "https://import-sighting-560240933279.us-west3.run.app"
+    TARGET_URL = "https://import-sighting-eibels3rba-wm.a.run.app"
 
     client = tasks_v2.CloudTasksAsyncClient()
 
@@ -149,6 +147,8 @@ async def main():
         await db.update_user(user._id, bird_buddy=user.bird_buddy)
 
 
+# TODO: process bb sightings from earliest to latest
+# TODO: test sending one manually onto the queue
 if __name__ == "__main__":
     load_dotenv()
     asyncio.run(main())
