@@ -11,7 +11,6 @@ def main():
     print("connecting to mongo db...")
     mongo = MongoClient(os.getenv("MONGODB_URI"))
     db = mongo.get_database()
-
     print("dropping collections...")
     db.users.drop()
     db.sightings.drop()

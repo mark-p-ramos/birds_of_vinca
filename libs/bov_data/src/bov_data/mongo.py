@@ -38,7 +38,9 @@ class MongoClient(DB):
         )
 
     async def create_sighting(self, sighting: Sighting) -> str:
-        result = await self._db.sightings.insert_one(asdict(sighting))
+        doc = asdict(sighting)
+        del doc["_id"]
+        result = await self._db.sightings.insert_one(doc)
         sighting._id = result.inserted_id
         return result.inserted_id
 

@@ -14,6 +14,9 @@ from curator.storage import GCS, unique_blob_name
 
 
 async def curate_videos(urls: list[str]) -> list[str]:
+    if not urls:
+        return []
+
     # fairly certain there is only ever one video even though it comes in a list
     url = urls[0]
 

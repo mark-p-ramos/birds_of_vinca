@@ -88,13 +88,6 @@ async def _upload_images(urls: List[str]):
 
 
 async def main():
-    # -- test upload images --
-    # urls = [
-    #     "https://media.app-api-graphql.app-api.prod.aws.mybirdbuddy.com/media/feeder/348ec5f8-16b4-48f5-aa93-d8a054fa652e/media/fe1eb837-07b6-44ce-99d2-4fb669701958/CONTENT.jpg?maxWidth=640&Expires=1771686528&Key-Pair-Id=K1HE0EC9UCSK2V&Signature=MEYCIQCPfPe9wRpLUhbInJI8KiwOsJPaQqX3LNYOcRFO7-RIPgIhAMg6hgg8-zZwph6e4E%7EAufyB93MBGbeaxBGORoh6Yvxb",
-    #     "https://media.app-api-graphql.app-api.prod.aws.mybirdbuddy.com/media/feeder/348ec5f8-16b4-48f5-aa93-d8a054fa652e/media/3513354a-fd72-4118-bd30-b45ab56bf101/CONTENT.jpg?maxWidth=640&Expires=1771686568&Key-Pair-Id=K1HE0EC9UCSK2V&Signature=MEYCIQDDWi-HOl8IdH-m17phgKn23mQ33jKBeoUHex6q2ovWYAIhAJc33UBGlKWfNhbOyNcVWKzUiKJ6g2KHjRPbCZ0MrRZi",
-    # ]
-    # new_urls = await _upload_images(urls)
-    # print(new_urls)
     pass
 
 
