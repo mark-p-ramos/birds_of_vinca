@@ -7,7 +7,7 @@ steps:
   # Rewrite bov_data dependency to use the local copy
   - name: "ubuntu"
     entrypoint: "sed"
-    args: ["-i", 's|bov-data @ file:[^"]*|bov-data @ file:bov_data|', "pyproject.toml"]
+    args: ["-i", 's|bov-data @ file:[^"]*|bov-data @ file:///workspace/bov_data|', "pyproject.toml"]
     dir: "curator"
 
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
