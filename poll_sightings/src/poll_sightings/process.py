@@ -127,7 +127,8 @@ async def main():
         since = _last_updated_at(user)
         bb_items = await _fetch_bb_items(bb, since)
 
-        i = 1
+        i = 0
+        iNew = 0
         try:
             for bb_item in bb_items:
                 sighting = Sighting(
@@ -140,13 +141,16 @@ async def main():
                     created_at=bb_item["created_at"],
                 )
 
-                await _dispatch_import_sighting(sighting)
+                i += 1
+                if not await db.exists_sighting(sighting.bb_id):
+                    iNew += 1
+
+                if iNew == 5:
+                    break
+
+                # await _dispatch_import_sighting(sighting)
 
                 since = sighting.created_at
-
-                if i == 5:
-                    break
-                i += 1
         finally:
             user.bird_buddy.last_polled_at = since
             # await db.update_user(user._id, bird_buddy=user.bird_buddy)
