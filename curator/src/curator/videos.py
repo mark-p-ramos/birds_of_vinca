@@ -137,7 +137,8 @@ def _curate_video(file_path: str) -> str | None:
 
     # --------- CALCULATE OUTPUT DURATION ----------
     output_duration_seconds = sum(end - start for start, end in merged)
-    print(f"Output duration: {output_duration_seconds:.2f} seconds")
+    if output_duration_seconds < 1:
+        return None
 
     # --------- CUT VIDEO ---------------------
     video = VideoFileClip(file_path)
@@ -147,10 +148,12 @@ def _curate_video(file_path: str) -> str | None:
         final = concatenate_videoclips(clips, method="compose")
         fd, output_path = tempfile.mkstemp(suffix=".mp4")
         os.close(fd)
-        final.write_videofile(output_path, fps=video.fps, codec="libx264", audio_codec="aac")
+        logger = None if os.getenv("APP_ENV") == "prod" else "bar"
+        final.write_videofile(
+            output_path, fps=video.fps, codec="libx264", audio_codec="aac", logger=logger
+        )
         return output_path
 
-    print("No significant motion detected. Output video not created.")
     return None
 
 

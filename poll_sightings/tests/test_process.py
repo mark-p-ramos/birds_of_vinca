@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from bov_data import BirdBuddy, BirdFeed, User
 
-from poll_sightings.process import _poll_collections, _poll_feed
+from poll_sightings.process import _fetch_bb_items, _poll_collections, _poll_feed
 
 # test update last database fetch timestamp
 # test create a google cloud task for each sighting
@@ -350,3 +350,36 @@ async def test_poll_collections_multiple(mock_collection, since_date):
     assert result[1]["bb_id"] == "collection-col_2"
     assert result[1]["species"] == ["Finch"]
     assert result[1]["image_urls"] == ["https://example.com/finch.jpg"]
+
+
+# --- _fetch_bb_items tests ---
+
+
+@pytest.mark.asyncio
+async def test_fetch_bb_items_sorted_by_created_at(
+    mock_postcard, mock_sighting, mock_collection, since_date
+):
+    """Test that _fetch_bb_items returns items sorted by created_at ascending."""
+    mock_bb = AsyncMock()
+
+    oldest = since_date + timedelta(minutes=5)
+    middle = since_date + timedelta(minutes=15)
+    newest = since_date + timedelta(minutes=30)
+
+    # Postcards return newest first
+    card_newest = mock_postcard("postcard_new", created_at=newest)
+    card_oldest = mock_postcard("postcard_old", created_at=oldest)
+    mock_bb.feed = AsyncMock(return_value=_mock_feed([card_newest, card_oldest]))
+    mock_bb.sighting_from_postcard = AsyncMock(return_value=mock_sighting())
+
+    # Collection returns middle timestamp
+    col = mock_collection(collection_id="col_mid", bird_name="Robin", visit_time=middle)
+    mock_bb.refresh_collections = AsyncMock(return_value={"col_mid": col})
+    mock_bb.collection = AsyncMock(return_value={})
+
+    result = await _fetch_bb_items(mock_bb, since_date)
+
+    assert len(result) == 3
+    assert result[0]["created_at"] == oldest
+    assert result[1]["created_at"] == middle
+    assert result[2]["created_at"] == newest
