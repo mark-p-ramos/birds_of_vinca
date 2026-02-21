@@ -11,9 +11,6 @@ from dotenv import load_dotenv
 from google.cloud import tasks_v2
 from google.cloud.tasks_v2.types import HttpRequest, OidcToken, Task
 
-load_dotenv(override=False)
-db: DB = MongoClient(os.getenv("MONGODB_URI"))
-
 
 def _species_from_postcard(bb_sighting: PostcardSighting) -> list[str]:
     return list(
@@ -109,7 +106,9 @@ async def _dispatch_import_sighting(sighting: Sighting) -> None:
         queue=QUEUE_ID,
         task=hashlib.sha256(sighting.bb_id.encode("utf-8")).hexdigest(),
     )
-    task = Task(http_request=http_request, name=task_name)
+    # TODO: uncomment to enable tast deduplication
+    # task = Task(http_request=http_request, name=task_name)
+    task = Task(http_request=http_request)
 
     parent = client.queue_path(project=PROJECT_ID, location=LOCATION_ID, queue=QUEUE_ID)
     try:
@@ -120,6 +119,7 @@ async def _dispatch_import_sighting(sighting: Sighting) -> None:
 
 
 async def main():
+    db: DB = MongoClient(os.getenv("MONGODB_URI"))
     users = await db.fetch_users()
 
     for user in users:
@@ -139,17 +139,19 @@ async def main():
                     media=Media(images=bb_item["image_urls"], videos=bb_item["video_urls"]),
                     created_at=bb_item["created_at"],
                 )
+
                 await _dispatch_import_sighting(sighting)
 
                 since = sighting.created_at
 
-                if i == 3:
+                if i == 5:
                     break
                 i += 1
         finally:
             user.bird_buddy.last_polled_at = since
-            await db.update_user(user._id, bird_buddy=user.bird_buddy)
+            # await db.update_user(user._id, bird_buddy=user.bird_buddy)
 
 
 if __name__ == "__main__":
+    load_dotenv()
     asyncio.run(main())
