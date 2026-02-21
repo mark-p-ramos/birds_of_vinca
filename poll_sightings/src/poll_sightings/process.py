@@ -3,6 +3,7 @@ import hashlib
 import os
 from datetime import UTC, datetime, timedelta
 
+import google.api_core.exceptions
 from birdbuddy.client import BirdBuddy as BirdBuddyClient
 from birdbuddy.client import FeedNodeType, PostcardSighting
 from bov_data import DB, Media, MongoClient, Sighting, User
@@ -116,7 +117,11 @@ async def _dispatch_import_sighting(sighting: Sighting) -> None:
     task = Task(http_request=http_request, name=task_name)
 
     parent = client.queue_path(project=PROJECT_ID, location=LOCATION_ID, queue=QUEUE_ID)
-    await client.create_task(request={"parent": parent, "task": task})
+    try:
+        await client.create_task(request={"parent": parent, "task": task})
+        print(f"dispatched import-sighting id: {task_name} for sighting id: {sighting.bb_id}")
+    except google.api_core.exceptions.AlreadyExists:
+        pass
 
 
 async def main():
@@ -128,27 +133,25 @@ async def main():
         since = _last_updated_at(user)
         bb_items = await _fetch_bb_items(bb, since)
 
-        for bb_item in bb_items:
-            sighting = Sighting(
-                bb_id=bb_item["bb_id"],
-                user_id=user._id,
-                bird_feed=user.bird_buddy.feed,
-                location_zip=user.bird_buddy.location_zip,
-                species=bb_item["species"],
-                media=Media(images=bb_item["image_urls"], videos=bb_item["video_urls"]),
-                created_at=bb_item["created_at"],
-            )
+        try:
+            for bb_item in bb_items:
+                sighting = Sighting(
+                    bb_id=bb_item["bb_id"],
+                    user_id=user._id,
+                    bird_feed=user.bird_buddy.feed,
+                    location_zip=user.bird_buddy.location_zip,
+                    species=bb_item["species"],
+                    media=Media(images=bb_item["image_urls"], videos=bb_item["video_urls"]),
+                    created_at=bb_item["created_at"],
+                )
+                await _dispatch_import_sighting(sighting)
 
-            await _dispatch_import_sighting(sighting)
-
-            since = max(since, sighting.created_at)
-
-        user.bird_buddy.last_polled_at = since
-        await db.update_user(user._id, bird_buddy=user.bird_buddy)
+                since = sighting.created_at
+        finally:
+            user.bird_buddy.last_polled_at = since
+            await db.update_user(user._id, bird_buddy=user.bird_buddy)
 
 
-# TODO: process bb sightings from earliest to latest
-# TODO: test sending one manually onto the queue
 if __name__ == "__main__":
     load_dotenv()
     asyncio.run(main())

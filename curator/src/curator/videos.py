@@ -27,7 +27,7 @@ async def curate_videos(urls: list[str]) -> list[str]:
 
     blob_name = unique_blob_name("videos", file_name)
     await _upload_video(curated_path, blob_name, content_type)
-    return blob_name
+    return [blob_name]
 
 
 def _normalize_to_constant_frame_rate(input_path: str, fps: int = 30) -> None:
