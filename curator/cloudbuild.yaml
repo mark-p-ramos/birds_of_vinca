@@ -24,7 +24,7 @@ steps:
       - --trigger-http
       - --timeout=600
       - --cpu=2
-      - --memory=4096MB
+      - --memory=8192MB
       - --max-instances=5
       - --set-env-vars=APP_ENV=prod
       - --set-secrets=MONGODB_URI=MONGODB_URI:latest,WEATHER_API_KEY=WEATHER_API_KEY:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest
