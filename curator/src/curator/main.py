@@ -23,14 +23,8 @@ sentry_sdk.init(
     send_default_pii=True,
 )
 
-
-db: DB | None = None
-
-
-def db_connect() -> DB:
-    global db
-    db = db if db is not None else MongoClient(os.getenv("MONGODB_URI"))
-    return db
+load_dotenv(override=False)
+db: DB = MongoClient(os.getenv("MONGODB_URI"))
 
 
 @functions_framework.http
@@ -47,7 +41,6 @@ def import_sighting(request: Request):
 async def main(sighting: Sighting) -> str:
     enable_asyncio_integration()
 
-    db = db_connect()
     if await db.exists_sighting(sighting.bb_id):
         return f"sighting id: {escape(sighting.bb_id)} already imported"
 
@@ -70,7 +63,6 @@ async def main(sighting: Sighting) -> str:
 
 
 if __name__ == "__main__":
-    load_dotenv()
     from bov_data import BirdFeed, Media
 
     sighting = Sighting(

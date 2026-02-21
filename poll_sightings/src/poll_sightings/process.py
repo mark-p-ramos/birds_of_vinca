@@ -11,13 +11,8 @@ from dotenv import load_dotenv
 from google.cloud import tasks_v2
 from google.cloud.tasks_v2.types import HttpRequest, OidcToken, Task
 
-db: DB | None = None
-
-
-def db_connect() -> DB:
-    global db
-    db = db if db is not None else MongoClient(os.getenv("MONGODB_URI"))
-    return db
+load_dotenv(override=False)
+db: DB = MongoClient(os.getenv("MONGODB_URI"))
 
 
 def _species_from_postcard(bb_sighting: PostcardSighting) -> list[str]:
@@ -125,7 +120,6 @@ async def _dispatch_import_sighting(sighting: Sighting) -> None:
 
 
 async def main():
-    db = db_connect()
     users = await db.fetch_users()
 
     for user in users:
@@ -133,6 +127,7 @@ async def main():
         since = _last_updated_at(user)
         bb_items = await _fetch_bb_items(bb, since)
 
+        i = 1
         try:
             for bb_item in bb_items:
                 sighting = Sighting(
@@ -147,11 +142,14 @@ async def main():
                 await _dispatch_import_sighting(sighting)
 
                 since = sighting.created_at
+
+                if i == 3:
+                    break
+                i += 1
         finally:
             user.bird_buddy.last_polled_at = since
-            # await db.update_user(user._id, bird_buddy=user.bird_buddy)
+            await db.update_user(user._id, bird_buddy=user.bird_buddy)
 
 
 if __name__ == "__main__":
-    load_dotenv()
     asyncio.run(main())

@@ -46,18 +46,17 @@ def _make_mock_db(**kwargs):
 @patch("curator.main.get_historical_weather", return_value={
     "temperature_f": 72.0, "was_cloudy": False, "was_precipitating": False,
 })
-@patch("curator.main.db_connect")
 def test_import_sighting_success(
-    mock_get_db, _mock_weather, mock_images, mock_videos, sample_sighting_json
+    _mock_weather, mock_images, mock_videos, sample_sighting_json
 ):
     """Test successful import of a new sighting."""
     mock_db = _make_mock_db()
     mock_db.exists_sighting = AsyncMock(return_value=False)
     mock_db.create_sighting = AsyncMock(return_value="sighting_789")
-    mock_get_db.return_value = mock_db
 
-    request = _make_request(sample_sighting_json)
-    result = import_sighting(request)
+    with patch("curator.main.db", mock_db):
+        request = _make_request(sample_sighting_json)
+        result = import_sighting(request)
 
     assert result == "created sighting id: sighting_789"
     mock_db.exists_sighting.assert_called_once_with("postcard-123")
@@ -75,18 +74,17 @@ def test_import_sighting_success(
 @patch("curator.main.get_historical_weather", return_value={
     "temperature_f": 55.0, "was_cloudy": True, "was_precipitating": False,
 })
-@patch("curator.main.db_connect")
 def test_import_sighting_writes_curated_media(
-    mock_get_db, _mock_weather, _mock_images, _mock_videos, sample_sighting_json
+    _mock_weather, _mock_images, _mock_videos, sample_sighting_json
 ):
     """Test that the sighting written to db has curated media blob names."""
     mock_db = _make_mock_db()
     mock_db.exists_sighting = AsyncMock(return_value=False)
     mock_db.create_sighting = AsyncMock(return_value="sighting_789")
-    mock_get_db.return_value = mock_db
 
-    request = _make_request(sample_sighting_json)
-    import_sighting(request)
+    with patch("curator.main.db", mock_db):
+        request = _make_request(sample_sighting_json)
+        import_sighting(request)
 
     created_sighting = mock_db.create_sighting.call_args[0][0]
 
@@ -107,15 +105,14 @@ def test_import_sighting_writes_curated_media(
         assert vid.endswith(".mp4")
 
 
-@patch("curator.main.db_connect")
-def test_import_sighting_duplicate(mock_get_db, sample_sighting_json):
+def test_import_sighting_duplicate(sample_sighting_json):
     """Test that duplicate sightings are rejected."""
     mock_db = _make_mock_db()
     mock_db.exists_sighting = AsyncMock(return_value=True)
-    mock_get_db.return_value = mock_db
 
-    request = _make_request(sample_sighting_json)
-    result = import_sighting(request)
+    with patch("curator.main.db", mock_db):
+        request = _make_request(sample_sighting_json)
+        result = import_sighting(request)
 
     assert "already imported" in result
     assert "postcard-123" in result
@@ -142,17 +139,16 @@ def test_import_sighting_empty_json():
 @patch("curator.main.get_historical_weather", return_value={
     "temperature_f": 72.0, "was_cloudy": False, "was_precipitating": False,
 })
-@patch("curator.main.db_connect")
 def test_import_sighting_skips_write_when_no_media(
-    mock_get_db, _mock_weather, _mock_images, _mock_videos, sample_sighting_json
+    _mock_weather, _mock_images, _mock_videos, sample_sighting_json
 ):
     """Test that no sighting is written to db if images and videos are both empty."""
     mock_db = _make_mock_db()
     mock_db.exists_sighting = AsyncMock(return_value=False)
     mock_db.create_sighting = AsyncMock()
-    mock_get_db.return_value = mock_db
 
-    request = _make_request(sample_sighting_json)
-    result = import_sighting(request)
+    with patch("curator.main.db", mock_db):
+        request = _make_request(sample_sighting_json)
+        result = import_sighting(request)
 
     mock_db.create_sighting.assert_not_called()
