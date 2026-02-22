@@ -115,7 +115,7 @@ async def _dispatch_import_sighting(sighting: Sighting) -> None:
     LOCATION_ID = "us-west3"
     QUEUE_ID = "sightings"
     SERVICE_ACCOUNT = "cloud-task-invoker@birds-of-vinca.iam.gserviceaccount.com"
-    TARGET_URL = "https://import-sighting-eibels3rba-wm.a.run.app"
+    TARGET_URL = "https://us-west3-birds-of-vinca.cloudfunctions.net/import-sighting"
 
     client = tasks_v2.CloudTasksAsyncClient()
 
@@ -124,7 +124,7 @@ async def _dispatch_import_sighting(sighting: Sighting) -> None:
         url=TARGET_URL,
         headers={"Content-type": "application/json"},
         body=sighting.to_json().encode(),
-        oidc_token=OidcToken(service_account_email=SERVICE_ACCOUNT),
+        oidc_token=OidcToken(service_account_email=SERVICE_ACCOUNT, audience=TARGET_URL),
     )
 
     task = Task(http_request=http_request)
