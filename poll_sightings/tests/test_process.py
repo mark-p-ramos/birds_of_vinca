@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from bov_data import BirdBuddy, BirdFeed, User
 
-from poll_sightings.process import _fetch_bb_items, _poll_collections, _poll_feed
+from poll_sightings.main import _fetch_bb_items, _poll_collections, _poll_feed
 
 # test update last database fetch timestamp
 # test create a google cloud task for each sighting
@@ -294,9 +294,7 @@ async def test_poll_collections_filters_old(mock_collection, since_date):
     )
     new_col = mock_collection(collection_id="new_col")
 
-    mock_bb.refresh_collections = AsyncMock(
-        return_value={"old_col": old_col, "new_col": new_col}
-    )
+    mock_bb.refresh_collections = AsyncMock(return_value={"old_col": old_col, "new_col": new_col})
     mock_bb.collection = AsyncMock(return_value=_mock_media())
 
     result = await _poll_collections(mock_bb, since_date)
@@ -311,9 +309,7 @@ async def test_poll_collections_no_media(mock_collection, since_date):
     """Test collection with no images or videos."""
     mock_bb = AsyncMock()
 
-    mock_bb.refresh_collections = AsyncMock(
-        return_value={"col_123": mock_collection()}
-    )
+    mock_bb.refresh_collections = AsyncMock(return_value={"col_123": mock_collection()})
     mock_bb.collection = AsyncMock(return_value=_mock_media())
 
     result = await _poll_collections(mock_bb, since_date)
@@ -331,9 +327,7 @@ async def test_poll_collections_multiple(mock_collection, since_date):
     col1 = mock_collection(collection_id="col_1", bird_name="Robin")
     col2 = mock_collection(collection_id="col_2", bird_name="Finch")
 
-    mock_bb.refresh_collections = AsyncMock(
-        return_value={"col_1": col1, "col_2": col2}
-    )
+    mock_bb.refresh_collections = AsyncMock(return_value={"col_1": col1, "col_2": col2})
     mock_bb.collection = AsyncMock(
         side_effect=[
             _mock_media(images=["https://example.com/robin.jpg"]),

@@ -1,0 +1,34 @@
+steps:
+  # Copy bov_data library into the poll_sightings source tree so it deploys with the function
+  - name: "ubuntu"
+    args: ["cp", "-r", "../libs/bov_data", "./bov_data"]
+    dir: "poll_sightings"
+
+  # Rewrite bov_data dependency to use the local copy
+  - name: "ubuntu"
+    entrypoint: "sed"
+    args: ["-i", 's|bov-data @ file:[^"]*|bov-data @ file:///workspace/bov_data|', "pyproject.toml"]
+    dir: "poll_sightings"
+
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    args:
+      - gcloud
+      - functions
+      - deploy
+      - poll-sightings
+      - --gen2
+      - --region=us-west3
+      - --runtime=python312
+      - --source=.
+      - --entry-point=poll_sightings
+      - --trigger-http
+      - --timeout=300
+      - --cpu=1
+      - --memory=256MB
+      - --max-instances=1
+      - --set-env-vars=APP_ENV=prod
+      - --set-secrets=MONGODB_URI=MONGODB_URI:latest
+    dir: "poll_sightings"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

@@ -14,14 +14,15 @@ from curator.images import curate_images
 from curator.videos import curate_videos
 from curator.weather import get_historical_weather
 
-sentry_sdk.init(
-    dsn="https://1192a22bf953b2327b2219cfad5f4a44@o4510925100941312.ingest.us.sentry.io/4510925123747840",
-    integrations=[GcpIntegration(timeout_warning=True)],
-    # Add data like request headers and IP for users,
-    # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
-    send_default_pii=True,
-    enable_logs=True,
-)
+if os.getenv("APP_ENV") == "prod":
+    sentry_sdk.init(
+        dsn="https://1192a22bf953b2327b2219cfad5f4a44@o4510925100941312.ingest.us.sentry.io/4510925123747840",
+        integrations=[GcpIntegration(timeout_warning=True)],
+        # Add data like request headers and IP for users,
+        # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+        send_default_pii=True,
+        enable_logs=True,
+    )
 
 
 @functions_framework.http
@@ -44,7 +45,7 @@ async def main(sighting: Sighting) -> str:
         return f"sighting id: {escape(sighting.bb_id)} already imported"
 
     weather = await get_historical_weather(
-        os.getenv("WEATHER_API_KEY"), "80027", sighting.created_at
+        os.getenv("WEATHER_API_KEY"), sighting.location_zip, sighting.created_at
     )
     sighting.weather = Weather(**weather)
 

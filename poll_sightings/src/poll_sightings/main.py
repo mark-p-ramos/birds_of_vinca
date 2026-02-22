@@ -1,15 +1,29 @@
 import asyncio
-import hashlib
 import os
 from datetime import UTC, datetime, timedelta
 
+import aiohttp
+import functions_framework
 import google.api_core.exceptions
+import sentry_sdk
 from birdbuddy.client import BirdBuddy as BirdBuddyClient
 from birdbuddy.client import FeedNodeType, PostcardSighting
 from bov_data import DB, Media, MongoClient, Sighting, User
 from dotenv import load_dotenv
+from flask import Request
 from google.cloud import tasks_v2
 from google.cloud.tasks_v2.types import HttpRequest, OidcToken, Task
+from sentry_sdk.integrations.asyncio import enable_asyncio_integration
+from sentry_sdk.integrations.gcp import GcpIntegration
+
+if os.getenv("APP_ENV") == "prod":
+    sentry_sdk.init(
+        dsn="https://1192a22bf953b2327b2219cfad5f4a44@o4510925100941312.ingest.us.sentry.io/4510925123747840",
+        integrations=[GcpIntegration()],
+        # Add data like request headers and IP for users,
+        # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+        send_default_pii=True,
+    )
 
 
 def _species_from_postcard(bb_sighting: PostcardSighting) -> list[str]:
@@ -78,10 +92,22 @@ def _last_updated_at(user: User) -> datetime:
 
 
 async def _fetch_bb_items(bb: BirdBuddyClient, since: datetime) -> list[dict]:
-    bb_postcards, bb_collections = await asyncio.gather(
-        _poll_feed(bb, since), _poll_collections(bb, since)
-    )
-    return sorted(bb_postcards + bb_collections, key=lambda x: x["created_at"])
+    MAX_RETRIES = 4
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            bb_postcards, bb_collections = await asyncio.gather(
+                _poll_feed(bb, since), _poll_collections(bb, since)
+            )
+            return sorted(bb_postcards + bb_collections, key=lambda x: x["created_at"])
+        except aiohttp.ContentTypeError:
+            # Bird Buddy API intermittently returns this error
+            # it doesn't appear to have anything to do with the request
+            # and always resolve after a short time so retry before failing
+            if attempt < MAX_RETRIES:
+                print(f"fetch failed (attempt {attempt + 1}/{MAX_RETRIES + 1}), retrying in 5s...")
+                await asyncio.sleep(5)
+            else:
+                raise
 
 
 async def _dispatch_import_sighting(sighting: Sighting) -> None:
@@ -100,25 +126,20 @@ async def _dispatch_import_sighting(sighting: Sighting) -> None:
         body=sighting.to_json().encode(),
         oidc_token=OidcToken(service_account_email=SERVICE_ACCOUNT),
     )
-    task_name = client.task_path(
-        project=PROJECT_ID,
-        location=LOCATION_ID,
-        queue=QUEUE_ID,
-        task=hashlib.sha256(sighting.bb_id.encode("utf-8")).hexdigest(),
-    )
-    # TODO: uncomment to enable tast deduplication
-    # task = Task(http_request=http_request, name=task_name)
-    task = Task(http_request=http_request)
 
+    task = Task(http_request=http_request)
     parent = client.queue_path(project=PROJECT_ID, location=LOCATION_ID, queue=QUEUE_ID)
+
     try:
         await client.create_task(request={"parent": parent, "task": task})
-        print(f"dispatched import-sighting id: {task_name} for sighting id: {sighting.bb_id}")
+        print(f"dispatched sighting id: {sighting.bb_id}")
     except google.api_core.exceptions.AlreadyExists:
         pass
 
 
 async def main():
+    enable_asyncio_integration()
+
     db: DB = MongoClient(os.getenv("MONGODB_URI"))
     users = await db.fetch_users()
 
@@ -127,8 +148,6 @@ async def main():
         since = _last_updated_at(user)
         bb_items = await _fetch_bb_items(bb, since)
 
-        i = 0
-        iNew = 0
         try:
             for bb_item in bb_items:
                 sighting = Sighting(
@@ -141,19 +160,18 @@ async def main():
                     created_at=bb_item["created_at"],
                 )
 
-                i += 1
-                if not await db.exists_sighting(sighting.bb_id):
-                    iNew += 1
-
-                if iNew == 5:
-                    break
-
-                # await _dispatch_import_sighting(sighting)
+                await _dispatch_import_sighting(sighting)
 
                 since = sighting.created_at
         finally:
             user.bird_buddy.last_polled_at = since
-            # await db.update_user(user._id, bird_buddy=user.bird_buddy)
+            await db.update_user(user._id, bird_buddy=user.bird_buddy)
+
+
+@functions_framework.http
+def poll_sightings(request: Request):
+    asyncio.run(main())
+    return "OK"
 
 
 if __name__ == "__main__":
