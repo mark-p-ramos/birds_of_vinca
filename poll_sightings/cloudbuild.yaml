@@ -27,6 +27,7 @@ steps:
       - --memory=256MB
       - --max-instances=1
       - --set-env-vars=APP_ENV=prod
+      - --run-service-account=cloud-task-invoker@birds-of-vinca.iam.gserviceaccount.com
       - --set-secrets=MONGODB_URI=MONGODB_URI:latest
     dir: "poll_sightings"
 
