@@ -92,7 +92,8 @@ def _curate_video(file_path: str) -> str | None:
 
             # Clean up noise
             fg_mask = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)[1]
-            fg_mask = cv2.dilate(fg_mask, None, iterations=2)
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+            fg_mask = cv2.dilate(fg_mask, kernel, iterations=2)
 
             contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -124,7 +125,7 @@ def _curate_video(file_path: str) -> str | None:
         segments.append((current_start, frame_idx / fps))
 
     # --------- MERGE CLOSE SEGMENTS ----------
-    merged = []
+    merged: list[list[float]] = []
     for start, end in segments:
         if not merged:
             merged.append([start, end])

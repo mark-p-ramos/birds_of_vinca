@@ -1,15 +1,15 @@
 import dataclasses
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from bov_data import BirdBuddy, BirdFeed, User
 from dotenv import load_dotenv
 from pymongo import ASCENDING, DESCENDING, MongoClient
 
 
-def main():
+def main() -> None:
     print("connecting to mongo db...")
-    mongo = MongoClient(os.getenv("MONGODB_URI"))
+    mongo: MongoClient = MongoClient(os.getenv("MONGODB_URI"))
     db = mongo.get_database()
     print("dropping collections...")
     db.users.drop()
@@ -25,7 +25,7 @@ def main():
                 location_zip="80027",
                 feed=BirdFeed(brand="3D Pet Products", product="Sizzle N' Heat"),
             ),
-            created_at=datetime.now(UTC),
+            created_at=datetime.now(timezone.utc),
         )
     )
 

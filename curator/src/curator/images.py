@@ -1,11 +1,17 @@
+from __future__ import annotations
+
 import asyncio
 import os
-from typing import List
+from typing import TYPE_CHECKING, List
 from urllib.parse import unquote, urlparse
 
 import httpx
 from dotenv import load_dotenv
 from openai import OpenAI
+from openai.types.responses import EasyInputMessageParam, ResponseInputImageParam
+
+if TYPE_CHECKING:
+    from google.cloud import storage
 
 from curator.storage import GCS, unique_blob_name
 
@@ -22,20 +28,24 @@ async def curate_images(urls: list[str]) -> list[str]:
 async def _is_bird_visible(imageUrl: str) -> bool:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+    image_content: ResponseInputImageParam = {
+        "type": "input_image",
+        "detail": "auto",
+        "image_url": imageUrl,
+    }
+    message: EasyInputMessageParam = {
+        "role": "user",
+        "content": [
+            {
+                "type": "input_text",
+                "text": "Is a bird or squirrel clearly visible showing most of the animal's body? Respond with 'Yes' or 'No'",
+            },
+            image_content,
+        ],
+    }
     response = client.responses.create(
         model="gpt-5",
-        input=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": "Is a bird or squirrel clearly visible showing most of the animal's body? Respond with 'Yes' or 'No'",
-                    },
-                    {"type": "input_image", "image_url": imageUrl},
-                ],
-            }
-        ],
+        input=[message],
     )
 
     return response.output_text == "Yes"
@@ -51,10 +61,10 @@ def _filename_from_url(url: str) -> str:
 
 async def _upload_single_image(
     client: httpx.AsyncClient,
-    bucket,
+    bucket: "storage.Bucket",
     url: str,
     semaphore: asyncio.Semaphore,
-):
+) -> str:
     async with semaphore:
         filename = _filename_from_url(url)
         blob_path = unique_blob_name("images", filename)
@@ -75,7 +85,7 @@ async def _upload_single_image(
         return blob_path
 
 
-async def _upload_images(urls: List[str]):
+async def _upload_images(urls: List[str]) -> list[str]:
     bucket = GCS.bucket
     semaphore = asyncio.Semaphore(10)  # Safe default for Cloud Functions
 
@@ -87,7 +97,11 @@ async def _upload_images(urls: List[str]):
         return await asyncio.gather(*tasks)
 
 
-async def main():
+async def main() -> None:
+    result = await _is_bird_visible(
+        "https://storage.googleapis.com/birds_of_vinca/images/057a78da-364d-4cbc-924f-47cb3e9ce11d.jpg"
+    )
+    print(result)
     pass
 
 

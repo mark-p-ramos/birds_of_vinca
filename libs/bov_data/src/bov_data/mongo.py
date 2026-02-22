@@ -41,8 +41,8 @@ class MongoClient(DB):
         doc = asdict(sighting)
         del doc["_id"]
         result = await self._db.sightings.insert_one(doc)
-        sighting._id = result.inserted_id
-        return result.inserted_id
+        sighting._id = str(result.inserted_id)
+        return str(result.inserted_id)
 
     async def exists_sighting(self, bb_id: str) -> bool:
         doc = await self._db.sightings.find_one({"bb_id": bb_id})

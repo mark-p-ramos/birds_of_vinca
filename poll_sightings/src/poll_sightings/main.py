@@ -1,6 +1,6 @@
 import asyncio
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import aiohttp
 import functions_framework
@@ -60,7 +60,7 @@ async def _poll_feed(bb: BirdBuddyClient, since: datetime) -> list[dict]:
 
 
 def _to_aware(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
 
 async def _poll_collections(bb: BirdBuddyClient, since: datetime) -> list[dict]:
@@ -88,7 +88,7 @@ async def _poll_collections(bb: BirdBuddyClient, since: datetime) -> list[dict]:
 
 def _last_updated_at(user: User) -> datetime:
     last_polled = user.bird_buddy.last_polled_at if user.bird_buddy else None
-    return last_polled if last_polled is not None else datetime.now(UTC) - timedelta(days=7)
+    return last_polled if last_polled is not None else datetime.now(timezone.utc) - timedelta(days=7)
 
 
 async def _fetch_bb_items(bb: BirdBuddyClient, since: datetime) -> list[dict]:
@@ -108,6 +108,7 @@ async def _fetch_bb_items(bb: BirdBuddyClient, since: datetime) -> list[dict]:
                 await asyncio.sleep(5)
             else:
                 raise
+    raise RuntimeError("unreachable")
 
 
 async def _dispatch_import_sighting(sighting: Sighting) -> None:
@@ -137,13 +138,15 @@ async def _dispatch_import_sighting(sighting: Sighting) -> None:
         pass
 
 
-async def main():
+async def main() -> None:
     enable_asyncio_integration()
 
-    db: DB = MongoClient(os.getenv("MONGODB_URI"))
+    db: DB = MongoClient(os.environ["MONGODB_URI"])
     users = await db.fetch_users()
 
     for user in users:
+        assert user._id is not None
+        assert user.bird_buddy is not None
         bb = BirdBuddyClient(user.bird_buddy.user, user.bird_buddy.password)
         since = _last_updated_at(user)
         bb_items = await _fetch_bb_items(bb, since)
@@ -162,6 +165,7 @@ async def main():
 
                 await _dispatch_import_sighting(sighting)
 
+                assert sighting.created_at is not None
                 since = sighting.created_at
         finally:
             user.bird_buddy.last_polled_at = since
@@ -169,7 +173,7 @@ async def main():
 
 
 @functions_framework.http
-def poll_sightings(request: Request):
+def poll_sightings(request: Request) -> str:
     asyncio.run(main())
     return "OK"
 

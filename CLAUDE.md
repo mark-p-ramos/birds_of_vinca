@@ -1,0 +1,1 @@
+Always use the virtual environment of each sub project when executing python commands for said sub projects.

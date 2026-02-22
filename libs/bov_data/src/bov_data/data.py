@@ -18,7 +18,7 @@ class BirdBuddy:
     feed: BirdFeed
     last_polled_at: Optional[datetime] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if isinstance(self.feed, dict):
             self.feed = BirdFeed(**self.feed)
         if isinstance(self.last_polled_at, str):
@@ -32,7 +32,7 @@ class User:
     bird_buddy: Optional[BirdBuddy] = None
     created_at: Optional[datetime] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if isinstance(self.bird_buddy, dict):
             self.bird_buddy = BirdBuddy(**self.bird_buddy)
 
@@ -65,7 +65,7 @@ class Sighting:
     weather: Optional[Weather] = None
     created_at: Optional[datetime] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if isinstance(self.bird_feed, dict):
             self.bird_feed = BirdFeed(**self.bird_feed)
 
@@ -80,5 +80,5 @@ class Sighting:
 
     def to_json(self) -> str:
         dictionary = asdict(self)
-        dictionary["created_at"] = self.created_at.isoformat()
+        dictionary["created_at"] = self.created_at.isoformat() if isinstance(self.created_at, datetime) else str(self.created_at)
         return json.dumps(dictionary)

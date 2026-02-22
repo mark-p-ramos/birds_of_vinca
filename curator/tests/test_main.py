@@ -43,18 +43,21 @@ def _make_mock_db(**kwargs):
 
 @patch("curator.main.curate_videos", return_value=[])
 @patch("curator.main.curate_images", return_value=["curated.jpg"])
-@patch("curator.main.get_historical_weather", return_value={
-    "temperature_f": 72.0, "was_cloudy": False, "was_precipitating": False,
-})
-def test_import_sighting_success(
-    _mock_weather, mock_images, mock_videos, sample_sighting_json
-):
+@patch(
+    "curator.main.get_weather",
+    return_value={
+        "temperature_f": 72.0,
+        "was_cloudy": False,
+        "was_precipitating": False,
+    },
+)
+def test_import_sighting_success(_mock_weather, mock_images, mock_videos, sample_sighting_json):
     """Test successful import of a new sighting."""
     mock_db = _make_mock_db()
     mock_db.exists_sighting = AsyncMock(return_value=False)
     mock_db.create_sighting = AsyncMock(return_value="sighting_789")
 
-    with patch("curator.main.db", mock_db):
+    with patch("curator.main.MongoClient", return_value=mock_db):
         request = _make_request(sample_sighting_json)
         result = import_sighting(request)
 
@@ -71,9 +74,14 @@ def test_import_sighting_success(
 
 @patch("curator.main.curate_videos", return_value=["videos/abc-123.mp4"])
 @patch("curator.main.curate_images", return_value=["images/def-456.jpg", "images/ghi-789.jpg"])
-@patch("curator.main.get_historical_weather", return_value={
-    "temperature_f": 55.0, "was_cloudy": True, "was_precipitating": False,
-})
+@patch(
+    "curator.main.get_weather",
+    return_value={
+        "temperature_f": 55.0,
+        "was_cloudy": True,
+        "was_precipitating": False,
+    },
+)
 def test_import_sighting_writes_curated_media(
     _mock_weather, _mock_images, _mock_videos, sample_sighting_json
 ):
@@ -82,7 +90,7 @@ def test_import_sighting_writes_curated_media(
     mock_db.exists_sighting = AsyncMock(return_value=False)
     mock_db.create_sighting = AsyncMock(return_value="sighting_789")
 
-    with patch("curator.main.db", mock_db):
+    with patch("curator.main.MongoClient", return_value=mock_db):
         request = _make_request(sample_sighting_json)
         import_sighting(request)
 
@@ -110,7 +118,7 @@ def test_import_sighting_duplicate(sample_sighting_json):
     mock_db = _make_mock_db()
     mock_db.exists_sighting = AsyncMock(return_value=True)
 
-    with patch("curator.main.db", mock_db):
+    with patch("curator.main.MongoClient", return_value=mock_db):
         request = _make_request(sample_sighting_json)
         result = import_sighting(request)
 
@@ -136,9 +144,14 @@ def test_import_sighting_empty_json():
 
 @patch("curator.main.curate_videos", return_value=[])
 @patch("curator.main.curate_images", return_value=[])
-@patch("curator.main.get_historical_weather", return_value={
-    "temperature_f": 72.0, "was_cloudy": False, "was_precipitating": False,
-})
+@patch(
+    "curator.main.get_weather",
+    return_value={
+        "temperature_f": 72.0,
+        "was_cloudy": False,
+        "was_precipitating": False,
+    },
+)
 def test_import_sighting_skips_write_when_no_media(
     _mock_weather, _mock_images, _mock_videos, sample_sighting_json
 ):
@@ -147,8 +160,8 @@ def test_import_sighting_skips_write_when_no_media(
     mock_db.exists_sighting = AsyncMock(return_value=False)
     mock_db.create_sighting = AsyncMock()
 
-    with patch("curator.main.db", mock_db):
+    with patch("curator.main.MongoClient", return_value=mock_db):
         request = _make_request(sample_sighting_json)
-        result = import_sighting(request)
+        import_sighting(request)
 
     mock_db.create_sighting.assert_not_called()

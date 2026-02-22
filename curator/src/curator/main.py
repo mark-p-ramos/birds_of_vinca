@@ -12,7 +12,7 @@ from sentry_sdk.integrations.gcp import GcpIntegration
 
 from curator.images import curate_images
 from curator.videos import curate_videos
-from curator.weather import get_historical_weather
+from curator.weather import get_weather
 
 if os.getenv("APP_ENV") == "prod":
     sentry_sdk.init(
@@ -26,7 +26,7 @@ if os.getenv("APP_ENV") == "prod":
 
 
 @functions_framework.http
-def import_sighting(request: Request):
+def import_sighting(request: Request) -> str:
     json = request.get_json(silent=True)
     if not json:
         return "request missing json body"
@@ -38,15 +38,14 @@ def import_sighting(request: Request):
 
 async def main(sighting: Sighting) -> str:
     enable_asyncio_integration()
-    db: DB = MongoClient(os.getenv("MONGODB_URI"))
+    db: DB = MongoClient(os.environ["MONGODB_URI"])
 
     sighting_exists = await db.exists_sighting(sighting.bb_id)
     if sighting_exists:
         return f"sighting id: {escape(sighting.bb_id)} already imported"
 
-    weather = await get_historical_weather(
-        os.getenv("WEATHER_API_KEY"), sighting.location_zip, sighting.created_at
-    )
+    assert sighting.created_at is not None, "sighting must have a created_at"
+    weather = await get_weather(sighting.location_zip, sighting.created_at)
     sighting.weather = Weather(**weather)
 
     images, videos = await asyncio.gather(
