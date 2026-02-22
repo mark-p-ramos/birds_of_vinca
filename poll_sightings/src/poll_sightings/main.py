@@ -88,7 +88,9 @@ async def _poll_collections(bb: BirdBuddyClient, since: datetime) -> list[dict]:
 
 def _last_updated_at(user: User) -> datetime:
     last_polled = user.bird_buddy.last_polled_at if user.bird_buddy else None
-    return last_polled if last_polled is not None else datetime.now(timezone.utc) - timedelta(days=7)
+    return (
+        last_polled if last_polled is not None else datetime.now(timezone.utc) - timedelta(days=7)
+    )
 
 
 async def _fetch_bb_items(bb: BirdBuddyClient, since: datetime) -> list[dict]:
@@ -105,10 +107,9 @@ async def _fetch_bb_items(bb: BirdBuddyClient, since: datetime) -> list[dict]:
             # and always resolve after a short time so retry before failing
             if attempt < MAX_RETRIES:
                 print(f"fetch failed (attempt {attempt + 1}/{MAX_RETRIES + 1}), retrying in 5s...")
-                await asyncio.sleep(5)
-            else:
-                raise
-    raise RuntimeError("unreachable")
+                await asyncio.sleep(10)
+
+    raise RuntimeError("MAX_RETRIES reached polling Bird Buddy")
 
 
 async def _dispatch_import_sighting(sighting: Sighting) -> None:
