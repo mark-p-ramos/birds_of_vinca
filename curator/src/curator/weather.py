@@ -19,7 +19,7 @@ async def get_historical_weather(api_key: str, location: str, dt: datetime) -> d
             - was_raining (bool)
     """
 
-    base_url = "http://api.weatherapi.com/v1/history.json"
+    base_url = "https://api.weatherapi.com/v1/history.json"
     date_str = dt.strftime("%Y-%m-%d")
     hour = dt.hour
 
