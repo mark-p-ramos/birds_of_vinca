@@ -1,50 +1,50 @@
 {
-  "folders": [
-    {
-      "name": "Root",
-      "path": "."
-    },
-    {
-      "name": "Curator",
-      "path": "curator"
-    },
-    {
-      "name": "Poll Sightings",
-      "path": "poll_sightings"
-    },
-    {
-      "name": "BOV Data",
-      "path": "libs/bov_data"
-    }
-  ],
-  "settings": {
-    "python.linting.enabled": true,
-    "python.linting.pylintEnabled": false,
-    "python.formatting.provider": "none",
-    "[python]": {
-      "editor.defaultFormatter": "ms-python.black-formatter",
-      "editor.formatOnSave": true,
-      "editor.codeActionsOnSave": {
-        "source.organizeImports": "explicit"
-      }
-    },
-    "ruff.enable": true,
-    "python.analysis.extraPaths": [
-      "${workspaceFolder:Poll Sightings}/.venv/lib/python3.12/site-packages",
-      "${workspaceFolder:Curator}/.venv/lib/python3.12/site-packages",
-      "${workspaceFolder:BOV Data}/src"
-    ],
-    "Curator.python.defaultInterpreterPath": "${workspaceFolder:Curator}/.venv/bin/python",
-    "Poll Sightings.python.defaultInterpreterPath": "${workspaceFolder:Poll Sightings}/.venv/bin/python",
-    "BOV Data.python.defaultInterpreterPath": "${workspaceFolder:BOV Data}/.venv/bin/python"
-  },
-  "extensions": {
-    "recommendations": [
-      "ms-python.python",
-      "ms-python.vscode-pylance",
-      "ms-python.black-formatter",
-      "charliermarsh.ruff",
-      "Anthropic.claude-code"
-    ]
-  }
+	"folders": [
+		{
+			"name": "Root",
+			"path": "."
+		},
+		{
+			"name": "Curator",
+			"path": "curator"
+		},
+		{
+			"name": "Poll Sightings",
+			"path": "poll_sightings"
+		},
+		{
+			"name": "BOV Data",
+			"path": "libs/bov_data"
+		}
+	],
+	"settings": {
+		"python.linting.enabled": true,
+		"python.linting.pylintEnabled": false,
+		"python.formatting.provider": "none",
+		"[python]": {
+			"editor.defaultFormatter": "ms-python.black-formatter",
+			"editor.formatOnSave": true,
+			"editor.codeActionsOnSave": {
+				"source.organizeImports": "explicit"
+			}
+		},
+		"ruff.enable": true,
+		"python.analysis.extraPaths": [
+			"${workspaceFolder:Poll Sightings}/.venv/lib/python3.12/site-packages",
+			"${workspaceFolder:Curator}/.venv/lib/python3.12/site-packages",
+			"${workspaceFolder:BOV Data}/src"
+		],
+		"Curator.python.defaultInterpreterPath": "${workspaceFolder:Curator}/.venv/bin/python",
+		"Poll Sightings.python.defaultInterpreterPath": "${workspaceFolder:Poll Sightings}/.venv/bin/python",
+		"BOV Data.python.defaultInterpreterPath": "${workspaceFolder:BOV Data}/.venv/bin/python"
+	},
+	"extensions": {
+		"recommendations": [
+			"ms-python.python",
+			"ms-python.vscode-pylance",
+			"ms-python.black-formatter",
+			"charliermarsh.ruff",
+			"Anthropic.claude-code"
+		]
+	}
 }

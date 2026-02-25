@@ -1,5 +1,6 @@
 import asyncio
 import os
+import traceback
 from datetime import datetime, timedelta, timezone
 
 import aiohttp
@@ -16,6 +17,17 @@ from google.cloud.tasks_v2.types import HttpRequest, OidcToken, Task
 from sentry_sdk.integrations.asyncio import enable_asyncio_integration
 from sentry_sdk.integrations.gcp import GcpIntegration
 
+def _sentry_before_send(event, hint):
+    exc_info = hint.get("exc_info")
+    if exc_info:
+        exc_type, _, tb = exc_info
+        if exc_type is aiohttp.ContentTypeError:
+            frames = traceback.extract_tb(tb)
+            if any(frame.name == "_poll_collections" for frame in frames):
+                return None
+    return event
+
+
 if os.getenv("APP_ENV") == "prod":
     sentry_sdk.init(
         dsn="https://1192a22bf953b2327b2219cfad5f4a44@o4510925100941312.ingest.us.sentry.io/4510925123747840",
@@ -23,6 +35,7 @@ if os.getenv("APP_ENV") == "prod":
         # Add data like request headers and IP for users,
         # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
         send_default_pii=True,
+        before_send=_sentry_before_send,
     )
 
 
