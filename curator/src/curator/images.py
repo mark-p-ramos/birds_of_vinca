@@ -13,34 +13,39 @@ from openai.types.responses import EasyInputMessageParam, ResponseInputImagePara
 if TYPE_CHECKING:
     from google.cloud import storage
 
-from curator.storage import GCS, unique_blob_name
-
 
 async def curate_images(urls: list[str]) -> list[str]:
-    check_images = [_is_bird_visible(url) for url in urls]
-    images_analyzed = await asyncio.gather(*check_images)
-    images_visible = [url for url, visible in zip(urls, images_analyzed) if visible]
-    return await _upload_images(images_visible)
+    if not urls:
+        return []
 
-    # TODO: dedup highly similar images
+    good_urls = await _curate_and_dedup(urls)
+    if not good_urls:
+        return []
+
+    return await _upload_images(good_urls)
 
 
-async def _is_bird_visible(imageUrl: str) -> bool:
+async def _curate_and_dedup(urls: list[str]) -> list[str]:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    image_content: ResponseInputImageParam = {
-        "type": "input_image",
-        "detail": "auto",
-        "image_url": imageUrl,
-    }
+    numbered_urls = "\n".join(f"{i + 1}. {url}" for i, url in enumerate(urls))
+    image_contents: list[ResponseInputImageParam] = [
+        {"type": "input_image", "detail": "auto", "image_url": url} for url in urls
+    ]
     message: EasyInputMessageParam = {
         "role": "user",
         "content": [
             {
                 "type": "input_text",
-                "text": "Is a bird or squirrel clearly visible showing most of the animal's body? Respond with 'Yes' or 'No'",
+                "text": (
+                    f"Here are the image URLs in order:\n{numbered_urls}\n\n"
+                    "From this group of input images: "
+                    "1. ignore images that are out of focus or do not clearly show a bird or squirrel "
+                    "2. remove images that are very similar to each other "
+                    "3. respond with a list of the remaining image urls from the list above, one per line"
+                ),
             },
-            image_content,
+            *image_contents,
         ],
     }
     response = client.responses.create(
@@ -48,7 +53,11 @@ async def _is_bird_visible(imageUrl: str) -> bool:
         input=[message],
     )
 
-    return response.output_text == "Yes"
+    return [
+        line.strip()
+        for line in response.output_text.splitlines()
+        if line.strip().startswith("http")
+    ]
 
 
 def _filename_from_url(url: str) -> str:
@@ -66,6 +75,8 @@ async def _upload_single_image(
     semaphore: asyncio.Semaphore,
 ) -> str:
     async with semaphore:
+        from curator.storage import unique_blob_name  # noqa: PLC0415
+
         filename = _filename_from_url(url)
         blob_path = unique_blob_name("images", filename)
         blob = bucket.blob(blob_path)
@@ -86,6 +97,8 @@ async def _upload_single_image(
 
 
 async def _upload_images(urls: List[str]) -> list[str]:
+    from curator.storage import GCS  # noqa: PLC0415
+
     bucket = GCS.bucket
     semaphore = asyncio.Semaphore(10)  # Safe default for Cloud Functions
 
@@ -98,11 +111,17 @@ async def _upload_images(urls: List[str]) -> list[str]:
 
 
 async def main() -> None:
-    result = await _is_bird_visible(
-        "https://storage.googleapis.com/birds_of_vinca/images/057a78da-364d-4cbc-924f-47cb3e9ce11d.jpg"
+    # test URLs from bird buddy sighting
+    result = await _curate_and_dedup(
+        [
+            "https://storage.googleapis.com/birds_of_vinca/images/25008423-63a1-4850-be20-97af3aa5c5c5.jpg",
+            "https://storage.googleapis.com/birds_of_vinca/images/902227fa-1440-4fc7-b44a-96c4dfb74a31.jpg",
+            "https://storage.googleapis.com/birds_of_vinca/images/a5ddeec0-54b9-41ae-8f5e-96011529f900.jpg",
+            "https://storage.googleapis.com/birds_of_vinca/images/0f4fdc0a-157a-4d27-b1e8-821645c50671.jpg",
+            "https://storage.googleapis.com/birds_of_vinca/images/c99da8d8-9471-40cd-9b6c-9ff3ac92020b.jpg",
+        ]
     )
     print(result)
-    pass
 
 
 if __name__ == "__main__":

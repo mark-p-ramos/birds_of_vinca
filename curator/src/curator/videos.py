@@ -10,12 +10,12 @@ import cv2
 import httpx
 from moviepy import VideoFileClip, concatenate_videoclips
 
-from curator.storage import GCS, unique_blob_name
-
 
 async def curate_videos(urls: list[str]) -> list[str]:
     if not urls:
         return []
+
+    from curator.storage import unique_blob_name  # noqa: PLC0415
 
     # fairly certain there is only ever one video even though it comes in a list
     url = urls[0]
@@ -163,6 +163,8 @@ async def _upload_video(
     blob_name: str,
     content_type: str,
 ) -> None:
+    from curator.storage import GCS  # noqa: PLC0415
+
     bucket = GCS.bucket
     blob = bucket.blob(blob_name)
     await asyncio.to_thread(blob.upload_from_filename, file_path, content_type=content_type)
