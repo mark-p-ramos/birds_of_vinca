@@ -11,6 +11,7 @@ from sentry_sdk.integrations.asyncio import enable_asyncio_integration
 from sentry_sdk.integrations.gcp import GcpIntegration
 
 from curator.images import curate_images
+from curator.instagram import post_sighting
 from curator.videos import curate_videos
 from curator.weather import get_weather
 
@@ -48,15 +49,18 @@ async def main(sighting: Sighting) -> str:
     weather = await get_weather(sighting.location_zip, sighting.created_at)
     sighting.weather = Weather(**weather)
 
-    images, videos = await asyncio.gather(
+    assert sighting.media is not None, "sighting must have media"
+    image_urls, video_path = await asyncio.gather(
         curate_images(sighting.media.images), curate_videos(sighting.media.videos)
     )
 
-    if not images and not videos:
+    if not image_urls and video_path is None:
         return "sighting not imported: no media"
 
-    sighting.media.images = images
-    sighting.media.videos = videos
+    permalink = await post_sighting(sighting, image_urls, video_path)
+    sighting.media = None
+    sighting.instagram_post_url = permalink
+
     created_id = await db.create_sighting(sighting)
     return f"created sighting id: {created_id}"
 

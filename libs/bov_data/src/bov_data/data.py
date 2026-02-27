@@ -60,16 +60,17 @@ class Sighting:
     bird_feed: BirdFeed
     location_zip: str
     species: list[str]
-    media: Media
     _id: Optional[str] = None
+    media: Optional[Media] = None
     weather: Optional[Weather] = None
+    instagram_post_url: Optional[str] = None
     created_at: Optional[datetime] = None
 
     def __post_init__(self) -> None:
         if isinstance(self.bird_feed, dict):
             self.bird_feed = BirdFeed(**self.bird_feed)
 
-        if isinstance(self.media, dict):
+        if self.media is not None and isinstance(self.media, dict):
             self.media = Media(**self.media)
 
         if isinstance(self.weather, dict):

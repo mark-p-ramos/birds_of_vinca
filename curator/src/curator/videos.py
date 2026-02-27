@@ -11,23 +11,15 @@ import httpx
 from moviepy import VideoFileClip, concatenate_videoclips
 
 
-async def curate_videos(urls: list[str]) -> list[str]:
+async def curate_videos(urls: list[str]) -> str | None:
     if not urls:
-        return []
-
-    from curator.storage import unique_blob_name  # noqa: PLC0415
+        return None
 
     # fairly certain there is only ever one video even though it comes in a list
     url = urls[0]
 
-    file_path, file_name, content_type = await download_video_to_tempdir(url)
-    curated_path = _curate_video(file_path)
-    if curated_path is None:
-        return []
-
-    blob_name = unique_blob_name("videos", file_name)
-    await _upload_video(curated_path, blob_name, content_type)
-    return [blob_name]
+    file_path, _file_name, _content_type = await download_video_to_tempdir(url)
+    return _curate_video(file_path)
 
 
 def _normalize_to_constant_frame_rate(input_path: str, fps: int = 30) -> None:
@@ -158,18 +150,6 @@ def _curate_video(file_path: str) -> str | None:
     return None
 
 
-async def _upload_video(
-    file_path: str,
-    blob_name: str,
-    content_type: str,
-) -> None:
-    from curator.storage import GCS  # noqa: PLC0415
-
-    bucket = GCS.bucket
-    blob = bucket.blob(blob_name)
-    await asyncio.to_thread(blob.upload_from_filename, file_path, content_type=content_type)
-
-
 async def download_video_to_tempdir(
     url: str,
     timeout: float = 30.0,
@@ -224,17 +204,11 @@ def _copy_to_temp(input_path: str) -> str:
 
 
 async def main() -> None:
-    # -- test upload video --
-    # path = "/tmp/tmpxplzmony.mp4"
-    # await _upload_video(path, "videos/test.mp4", "video/mp4")
-    # print("upload complete")
-
     # -- test curate video --
     # input_path = "../../tests/videos/chickadee.mp4"
     # temp_path = _copy_to_temp(input_path)
     # curated_path = _curate_video(temp_path)
-    # if curated_path is not None:
-    #     print(curated_path)
+    # print(curated_path)
     pass
 
 

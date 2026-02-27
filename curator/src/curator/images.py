@@ -2,27 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import TYPE_CHECKING, List
-from urllib.parse import unquote, urlparse
 
 import httpx
 from dotenv import load_dotenv
 from openai import OpenAI
 from openai.types.responses import EasyInputMessageParam, ResponseInputImageParam
 
-if TYPE_CHECKING:
-    from google.cloud import storage
-
 
 async def curate_images(urls: list[str]) -> list[str]:
     if not urls:
         return []
 
-    good_urls = await _curate_and_dedup(urls)
-    if not good_urls:
-        return []
-
-    return await _upload_images(good_urls)
+    return await _curate_and_dedup(urls)
 
 
 async def _curate_and_dedup(urls: list[str]) -> list[str]:
@@ -58,56 +49,6 @@ async def _curate_and_dedup(urls: list[str]) -> list[str]:
         for line in response.output_text.splitlines()
         if line.strip().startswith("http")
     ]
-
-
-def _filename_from_url(url: str) -> str:
-    parsed = urlparse(url)
-    filename = unquote(parsed.path.split("/")[-1])
-    if not filename:
-        raise ValueError(f"Could not determine filename from URL: {url}")
-    return filename
-
-
-async def _upload_single_image(
-    client: httpx.AsyncClient,
-    bucket: "storage.Bucket",
-    url: str,
-    semaphore: asyncio.Semaphore,
-) -> str:
-    async with semaphore:
-        from curator.storage import unique_blob_name  # noqa: PLC0415
-
-        filename = _filename_from_url(url)
-        blob_path = unique_blob_name("images", filename)
-        blob = bucket.blob(blob_path)
-
-        response = await client.get(url)
-        response.raise_for_status()
-
-        content_type = response.headers.get("Content-Type")
-
-        # GCS client is blocking → offload to thread
-        await asyncio.to_thread(
-            blob.upload_from_string,
-            response.content,
-            content_type=content_type,
-        )
-
-        return blob_path
-
-
-async def _upload_images(urls: List[str]) -> list[str]:
-    from curator.storage import GCS  # noqa: PLC0415
-
-    bucket = GCS.bucket
-    semaphore = asyncio.Semaphore(10)  # Safe default for Cloud Functions
-
-    timeout = httpx.Timeout(10.0, connect=5.0)
-
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        tasks = [_upload_single_image(client, bucket, url, semaphore) for url in urls]
-
-        return await asyncio.gather(*tasks)
 
 
 async def main() -> None:

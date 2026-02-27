@@ -14,7 +14,6 @@ authors = [
 dependencies = [
     "flask>=3.1.0",
     "functions-framework>=3.0.0",
-    "google-cloud-storage>=3.9.0",
     "httpx>=0.28.0",
     "markupsafe>=3.0.0",
     "moviepy>=2.0.0",
@@ -62,6 +61,6 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["google.cloud.*", "moviepy.*"]
+module = ["moviepy.*"]
 ignore_missing_imports = true
 follow_imports = "skip"

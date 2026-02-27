@@ -27,7 +27,7 @@ steps:
       - --memory=8192MB
       - --max-instances=2
       - --set-env-vars=APP_ENV=prod
-      - --set-secrets=MONGODB_URI=MONGODB_URI:latest,WEATHER_API_KEY=WEATHER_API_KEY:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest
+      - --set-secrets=MONGODB_URI=MONGODB_URI:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,INSTAGRAM_ACCESS_TOKEN=INSTAGRAM_ACCESS_TOKEN:latest,INSTAGRAM_ACCOUNT_ID=INSTAGRAM_ACCOUNT_ID:latest
     dir: "curator"
 
 options:
