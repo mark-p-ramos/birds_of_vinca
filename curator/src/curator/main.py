@@ -57,9 +57,12 @@ async def main(sighting: Sighting) -> str:
     if not image_urls and video_path is None:
         return "sighting not imported: no media"
 
-    permalink = await post_sighting(sighting, image_urls, video_path)
-    sighting.media = None
-    sighting.instagram_post_url = permalink
+    image_permalink, video_permalink = await post_sighting(sighting, image_urls, video_path)
+    # TODO: once we post all the videos to IG, we can get rid of these fields from DB altogether
+    sighting.media.images = []
+    sighting.media.videos = []
+    sighting.media.instagram_images_post_url = image_permalink
+    sighting.media.instagram_video_post_url = video_permalink
 
     created_id = await db.create_sighting(sighting)
     return f"created sighting id: {created_id}"

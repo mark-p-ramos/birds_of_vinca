@@ -51,6 +51,8 @@ class Weather:
 class Media:
     images: list[str]
     videos: list[str]
+    instagram_images_post_url: Optional[str] = None
+    instagram_video_post_url: Optional[str] = None
 
 
 @dataclass
@@ -63,7 +65,6 @@ class Sighting:
     _id: Optional[str] = None
     media: Optional[Media] = None
     weather: Optional[Weather] = None
-    instagram_post_url: Optional[str] = None
     created_at: Optional[datetime] = None
 
     def __post_init__(self) -> None:
@@ -81,5 +82,9 @@ class Sighting:
 
     def to_json(self) -> str:
         dictionary = asdict(self)
-        dictionary["created_at"] = self.created_at.isoformat() if isinstance(self.created_at, datetime) else str(self.created_at)
+        dictionary["created_at"] = (
+            self.created_at.isoformat()
+            if isinstance(self.created_at, datetime)
+            else str(self.created_at)
+        )
         return json.dumps(dictionary)

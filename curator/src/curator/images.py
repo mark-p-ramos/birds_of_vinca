@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import os
 
-import httpx
 from dotenv import load_dotenv
 from openai import OpenAI
 from openai.types.responses import EasyInputMessageParam, ResponseInputImageParam
