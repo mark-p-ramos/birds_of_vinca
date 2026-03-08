@@ -29,14 +29,22 @@ async def post_sighting(
         video_permalink: str | None = None
 
         if image_urls:
-            image_permalink = await _post_sighting_image(
-                client, ig_user_id, token, image_urls, caption
-            )
+            try:
+                image_permalink = await _post_sighting_image(
+                    client, ig_user_id, token, image_urls, caption
+                )
+            except RuntimeError as e:
+                if not is_ig_spam(e):
+                    raise
 
         if video_path is not None:
-            video_permalink = await _post_sighting_video(
-                client, ig_user_id, token, video_path, caption
-            )
+            try:
+                video_permalink = await _post_sighting_video(
+                    client, ig_user_id, token, video_path, caption
+                )
+            except RuntimeError as e:
+                if not is_ig_spam(e):
+                    raise
 
     return image_permalink, video_permalink
 
@@ -63,6 +71,7 @@ def _build_caption(sighting: Sighting) -> str:
 
 
 def is_ig_spam(e: RuntimeError) -> bool:
+    # IG keeps returning this error but sometimes still makes the post regardless
     try:
         body = json.loads(str(e).split(": ", 1)[1])
         ig_error = body.get("error", {})
