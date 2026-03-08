@@ -11,7 +11,7 @@ from sentry_sdk.integrations.asyncio import enable_asyncio_integration
 from sentry_sdk.integrations.gcp import GcpIntegration
 
 from curator.images import curate_images
-from curator.instagram import post_sighting
+from curator.instagram import is_ig_spam, post_sighting
 from curator.videos import curate_videos
 from curator.weather import get_weather
 
@@ -54,10 +54,14 @@ async def main(sighting: Sighting) -> str:
         curate_images(sighting.media.images), curate_videos(sighting.media.videos)
     )
 
-    if not image_urls and video_path is None:
-        return "sighting not imported: no media"
+    try:
+        image_permalink, video_permalink = await post_sighting(sighting, image_urls, video_path)
+    except RuntimeError as e:
+        if is_ig_spam(e):
+            image_permalink, video_permalink = None, None
+        else:
+            raise
 
-    image_permalink, video_permalink = await post_sighting(sighting, image_urls, video_path)
     # TODO: once we post all the videos to IG, we can get rid of these fields from DB altogether
     sighting.media.images = []
     sighting.media.videos = []

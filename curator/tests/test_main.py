@@ -41,7 +41,11 @@ def _make_mock_db(**kwargs):
     return mock_db
 
 
-@patch("curator.main.post_sighting", new_callable=AsyncMock, return_value=("https://www.instagram.com/p/test/", None))
+@patch(
+    "curator.main.post_sighting",
+    new_callable=AsyncMock,
+    return_value=("https://www.instagram.com/p/test/", None),
+)
 @patch("curator.main.curate_videos", return_value=None)
 @patch("curator.main.curate_images", return_value=["curated.jpg"])
 @patch(
@@ -52,7 +56,9 @@ def _make_mock_db(**kwargs):
         "was_precipitating": False,
     },
 )
-def test_import_sighting_success(_mock_weather, mock_images, mock_videos, _mock_post, sample_sighting_json):
+def test_import_sighting_success(
+    _mock_weather, mock_images, mock_videos, _mock_post, sample_sighting_json
+):
     """Test successful import of a new sighting."""
     mock_db = _make_mock_db()
     mock_db.exists_sighting = AsyncMock(return_value=False)
@@ -76,7 +82,10 @@ def test_import_sighting_success(_mock_weather, mock_images, mock_videos, _mock_
 @patch(
     "curator.main.post_sighting",
     new_callable=AsyncMock,
-    return_value=("https://www.instagram.com/p/images_post/", "https://www.instagram.com/reel/video_post/"),
+    return_value=(
+        "https://www.instagram.com/p/images_post/",
+        "https://www.instagram.com/reel/video_post/",
+    ),
 )
 @patch("curator.main.curate_videos", return_value="videos/abc-123.mp4")
 @patch("curator.main.curate_images", return_value=["images/def-456.jpg", "images/ghi-789.jpg"])
@@ -108,8 +117,14 @@ def test_import_sighting_posts_to_instagram(
     assert created_sighting.location_zip == sample_sighting_json["location_zip"]
     assert created_sighting.species == sample_sighting_json["species"]
 
-    assert created_sighting.media.instagram_images_post_url == "https://www.instagram.com/p/images_post/"
-    assert created_sighting.media.instagram_video_post_url == "https://www.instagram.com/reel/video_post/"
+    assert (
+        created_sighting.media.instagram_images_post_url
+        == "https://www.instagram.com/p/images_post/"
+    )
+    assert (
+        created_sighting.media.instagram_video_post_url
+        == "https://www.instagram.com/reel/video_post/"
+    )
 
 
 def test_import_sighting_duplicate(sample_sighting_json):
@@ -141,6 +156,11 @@ def test_import_sighting_empty_json():
     assert result == "request missing json body"
 
 
+@patch(
+    "curator.main.post_sighting",
+    new_callable=AsyncMock,
+    return_value=(None, None),
+)
 @patch("curator.main.curate_videos", return_value=None)
 @patch("curator.main.curate_images", return_value=[])
 @patch(
@@ -151,16 +171,17 @@ def test_import_sighting_empty_json():
         "was_precipitating": False,
     },
 )
-def test_import_sighting_skips_write_when_no_media(
-    _mock_weather, _mock_images, _mock_videos, sample_sighting_json
+def test_import_sighting_writes_when_no_media(
+    _mock_weather, _mock_images, _mock_videos, _mock_post, sample_sighting_json
 ):
-    """Test that no sighting is written to db if images and videos are both empty."""
+    """Test that sighting is still written to db even if images and videos are both empty."""
     mock_db = _make_mock_db()
     mock_db.exists_sighting = AsyncMock(return_value=False)
-    mock_db.create_sighting = AsyncMock()
+    mock_db.create_sighting = AsyncMock(return_value="sighting_789")
 
     with patch("curator.main.MongoClient", return_value=mock_db):
         request = _make_request(sample_sighting_json)
-        import_sighting(request)
+        result = import_sighting(request)
 
-    mock_db.create_sighting.assert_not_called()
+    assert result == "created sighting id: sighting_789"
+    mock_db.create_sighting.assert_called_once()

@@ -2,6 +2,10 @@ import asyncio
 import os
 import traceback
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sentry_sdk._types import Event, Hint
 
 import aiohttp
 import functions_framework
@@ -17,7 +21,8 @@ from google.cloud.tasks_v2.types import HttpRequest, OidcToken, Task
 from sentry_sdk.integrations.asyncio import enable_asyncio_integration
 from sentry_sdk.integrations.gcp import GcpIntegration
 
-def _sentry_before_send(event, hint):
+
+def _sentry_before_send(event: "Event", hint: "Hint") -> "Event | None":
     exc_info = hint.get("exc_info")
     if exc_info:
         exc_type, _, tb = exc_info
