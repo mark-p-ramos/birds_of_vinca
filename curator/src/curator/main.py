@@ -1,5 +1,6 @@
 import asyncio
 import os
+from datetime import datetime, timedelta, timezone
 
 import functions_framework
 import sentry_sdk
@@ -45,6 +46,10 @@ async def main(sighting: Sighting) -> str:
     if sighting_exists:
         return f"sighting id: {escape(sighting.bb_id)} already imported"
 
+    is_too_many_squirrels = await _is_too_many_squirrels(db, sighting)
+    if is_too_many_squirrels:
+        return "sighting not imported: too many squirrels"
+
     assert sighting.created_at is not None, "sighting must have a created_at"
     weather = await get_weather(sighting.location_zip, sighting.created_at)
     sighting.weather = Weather(**weather)
@@ -64,6 +69,13 @@ async def main(sighting: Sighting) -> str:
 
     created_id = await db.create_sighting(sighting)
     return f"created sighting id: {created_id}"
+
+
+async def _is_too_many_squirrels(db: DB, sighting: Sighting) -> bool:
+    if not any("squirrel" in s.lower() for s in sighting.species):
+        return False
+    since = (sighting.created_at or datetime.now(timezone.utc)) - timedelta(hours=6)
+    return await db.has_squirrel_sighting_since(since)
 
 
 if __name__ == "__main__":

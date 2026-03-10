@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional, Protocol
 
 from bov_data.data import BirdBuddy, Sighting, User
@@ -13,3 +14,5 @@ class DB(Protocol):
     async def create_sighting(self, sighting: Sighting) -> str: ...
 
     async def exists_sighting(self, id: str) -> bool: ...
+
+    async def has_squirrel_sighting_since(self, date: datetime) -> bool: ...

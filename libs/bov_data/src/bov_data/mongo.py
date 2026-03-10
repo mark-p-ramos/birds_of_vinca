@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from datetime import datetime
 from typing import Optional
 
 import pymongo
@@ -46,4 +47,13 @@ class MongoClient(DB):
 
     async def exists_sighting(self, bb_id: str) -> bool:
         doc = await self._db.sightings.find_one({"bb_id": bb_id})
+        return doc is not None
+
+    async def has_squirrel_sighting_since(self, date: datetime) -> bool:
+        doc = await self._db.sightings.find_one(
+            {
+                "created_at": {"$gte": date},
+                "species": {"$elemMatch": {"$regex": "squirrel", "$options": "i"}},
+            }
+        )
         return doc is not None

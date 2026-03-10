@@ -1,11 +1,12 @@
+import asyncio
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from bov_data import BirdFeed, Media, Sighting
 
-from curator.main import import_sighting
+from curator.main import _is_too_many_squirrels, import_sighting
 
 
 @pytest.fixture
@@ -185,3 +186,73 @@ def test_import_sighting_writes_when_no_media(
 
     assert result == "created sighting id: sighting_789"
     mock_db.create_sighting.assert_called_once()
+
+
+def test_import_sighting_too_many_squirrels(sample_sighting_json):
+    """Test that a sighting is not imported when there are too many squirrels."""
+    mock_db = _make_mock_db()
+    mock_db.exists_sighting = AsyncMock(return_value=False)
+
+    with patch("curator.main._is_too_many_squirrels", new=AsyncMock(return_value=True)):
+        with patch("curator.main.MongoClient", return_value=mock_db):
+            request = _make_request(sample_sighting_json)
+            result = import_sighting(request)
+
+    assert result == "sighting not imported: too many squirrels"
+    mock_db.create_sighting.assert_not_called()
+
+
+def test_is_too_many_squirrels_no_squirrel_in_species(sample_sighting):
+    """Returns False immediately when sighting has no squirrel species."""
+    mock_db = _make_mock_db()
+    mock_db.has_squirrel_sighting_since = AsyncMock(return_value=True)
+
+    result = asyncio.run(_is_too_many_squirrels(mock_db, sample_sighting))
+
+    assert result is False
+    mock_db.has_squirrel_sighting_since.assert_not_called()
+
+
+def test_is_too_many_squirrels_recent_squirrel_exists(sample_sighting):
+    """Returns True when incoming sighting has squirrel and a recent squirrel sighting exists."""
+    sample_sighting.species = ["Eastern Gray Squirrel"]
+    mock_db = _make_mock_db()
+    mock_db.has_squirrel_sighting_since = AsyncMock(return_value=True)
+
+    result = asyncio.run(_is_too_many_squirrels(mock_db, sample_sighting))
+
+    assert result is True
+
+
+def test_is_too_many_squirrels_no_recent_squirrel(sample_sighting):
+    """Returns False when incoming sighting has squirrel but no recent squirrel sighting in DB."""
+    sample_sighting.species = ["Eastern Gray Squirrel"]
+    mock_db = _make_mock_db()
+    mock_db.has_squirrel_sighting_since = AsyncMock(return_value=False)
+
+    result = asyncio.run(_is_too_many_squirrels(mock_db, sample_sighting))
+
+    assert result is False
+
+
+def test_is_too_many_squirrels_case_insensitive(sample_sighting):
+    """Squirrel check is case-insensitive (e.g. 'SQUIRREL', 'Squirrel')."""
+    mock_db = _make_mock_db()
+    mock_db.has_squirrel_sighting_since = AsyncMock(return_value=True)
+
+    for name in ["SQUIRREL", "Squirrel", "Red Squirrel"]:
+        sample_sighting.species = [name]
+        result = asyncio.run(_is_too_many_squirrels(mock_db, sample_sighting))
+        assert result is True, f"Expected True for species '{name}'"
+
+
+def test_is_too_many_squirrels_passes_correct_since_date(sample_sighting):
+    """Passes a datetime 6 hours before sighting.created_at to the DB query."""
+    mock_db = _make_mock_db()
+    mock_db.has_squirrel_sighting_since = AsyncMock(return_value=False)
+    sample_sighting.species = ["Eastern Gray Squirrel"]
+
+    asyncio.run(_is_too_many_squirrels(mock_db, sample_sighting))
+
+    expected_since = sample_sighting.created_at - timedelta(hours=6)
+    mock_db.has_squirrel_sighting_since.assert_called_once_with(expected_since)
