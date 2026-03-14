@@ -22,13 +22,14 @@ async def post_sighting(
     """
     ig_user_id = os.environ["INSTAGRAM_ACCOUNT_ID"]
     token = os.environ["INSTAGRAM_ACCESS_TOKEN"]
+    image_enabled = os.environ["INSTAGRAM_POST_PICS_ENABLED"] == "true"
     caption = _build_caption(sighting)
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         image_permalink: str | None = None
         video_permalink: str | None = None
 
-        if image_urls:
+        if image_enabled and image_urls:
             try:
                 image_permalink = await _post_sighting_image(
                     client, ig_user_id, token, image_urls, caption

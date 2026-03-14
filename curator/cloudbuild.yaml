@@ -26,7 +26,7 @@ steps:
       - --cpu=4
       - --memory=8192MB
       - --max-instances=2
-      - --set-env-vars=APP_ENV=prod
+      - --set-env-vars=APP_ENV=prod,INSTAGRAM_POST_PICS_ENABLED=false
       - --set-secrets=MONGODB_URI=MONGODB_URI:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,INSTAGRAM_ACCESS_TOKEN=INSTAGRAM_ACCESS_TOKEN:latest,INSTAGRAM_ACCOUNT_ID=INSTAGRAM_ACCOUNT_ID:latest
     dir: "curator"
 
