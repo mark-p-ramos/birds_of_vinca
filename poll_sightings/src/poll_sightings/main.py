@@ -147,7 +147,10 @@ async def _dispatch_import_sighting(sighting: Sighting) -> None:
         oidc_token=OidcToken(service_account_email=SERVICE_ACCOUNT, audience=TARGET_URL),
     )
 
-    task = Task(http_request=http_request)
+    task_name = client.task_path(
+        PROJECT_ID, LOCATION_ID, QUEUE_ID, f"import-sighting-{sighting.bb_id}"
+    )
+    task = Task(http_request=http_request, name=task_name)
     parent = client.queue_path(project=PROJECT_ID, location=LOCATION_ID, queue=QUEUE_ID)
 
     try:
