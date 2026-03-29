@@ -1,6 +1,11 @@
 {
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "sentry"
   ],
-  "enableAllProjectMcpServers": true
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)"
+    ]
+  }
 }

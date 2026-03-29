@@ -63,18 +63,21 @@ async def _poll_feed(bb: BirdBuddyClient, since: datetime) -> list[dict]:
     bb_postcards = bb_feed.filter(newer_than=since, of_type=FeedNodeType.NewPostcard)
 
     fetch_sightings = [bb.sighting_from_postcard(bb_card.node_id) for bb_card in bb_postcards]
-    bb_sightings = await asyncio.gather(*fetch_sightings)
+    bb_sightings = await asyncio.gather(*fetch_sightings, return_exceptions=True)
 
-    return [
-        {
+    results = []
+    for bb_card, bb_sighting in zip(bb_postcards, bb_sightings):
+        if isinstance(bb_sighting, Exception):
+            print(f"skipping postcard {bb_card.node_id}: {bb_sighting}")
+            continue
+        results.append({
             "bb_id": f"postcard-{bb_card.data['id']}",
             "created_at": bb_card.created_at,
             "species": _species_from_postcard(bb_sighting),
             "image_urls": [media.content_url for media in bb_sighting.medias],
             "video_urls": [video.content_url for video in bb_sighting.video_media],
-        }
-        for bb_card, bb_sighting in zip(bb_postcards, bb_sightings)
-    ]
+        })
+    return results
 
 
 def _to_aware(dt: datetime) -> datetime:
